@@ -30,3 +30,10 @@
 *.exe
 *.out
 *.app
+
+# Output Files
+*.dat
+*.txt
+
+# Temp backups
+*.bak
