@@ -23,27 +23,27 @@ int main(int argc,char *argv[])
 	if(argc>4)
 		eventsRequired=atof(argv[4]);
 
-	sweepMaxCount=eventsRequired*skipSweepCount;
-	int N=int(mN/m);
-	double w=m;
-
 
 	//lattice(double mT=1,double wT=1,int nT=120,double dx=1.0,int randseed=0,int skipSweepCount=-1,int writeEventCount=128);
-	lattice alat(m,w,N,h,randseed,skipSweepCount,writeEventCount);
-	alat.initialize("hot");
-	alat.printLattice();
+	phiFourLattice alat;
+	printf("HAHA IN MAIN\n");
+	//alat.simplePrintfFromKernel();
 
-	cout<<"\nDoing simulation for "<<sweepMaxCount<<" sweeps for storing "<<eventsRequired<<" configurations \n";
-	cout<<"\n";
-	alat.clearFile();
-	cout<<"\n";
-	alat.takeSweep(sweepMaxCount);
-	cout<<"\n";
-	cout<<"\n";
-	alat.printLattice();
-	alat.printToASCII();
-	cout<<"\n";
-	//alat.takeStride(10);
-	//alat.printLattice();
+	printf("\nPrint the lattice before heating up \n");
+	
+	alat.printLatticeOnGPU();
+	
+	alat.initializeLatticeCPU(1,0);
+	
+	alat.copyStateInCPUtoGPU();
+		
+	printf("\n Printing the lattice after the reinitialization !! \n ");
+	alat.printLatticeOnCPU();
+	printf("\n Printing the lattice  on  gpu after the copy !! \n ");
+	alat.printLatticeOnGPU();
+	printf("\n Printing the lattice after the reinitialization and copy !! \n ");
+	alat.printLatticeOnCPU();
+	
+
 	return 0;
 }

@@ -1,7 +1,88 @@
 #include "lattice.h"
 
 
- lattice::lattice(double mT,double wT ,int nT,double dx,int randseed,int skipSweepCount,int writeEventCount)
+phiFourLattice::phiFourLattice(uint8_t dim,uint16_t tStepCount,uint16_t xStepCount,
+				float mass,float lambda,uint8_t initialization,int randseed) :
+						dim_(dim),
+						tStepCount_(tStepCount),
+						xStepCount_(xStepCount),
+						m_(mass),
+						lambda_(lambda),
+						latticeSize_( dim_> 1 ? tStepCount_*pow(xStepCount_,dim_-1): 0),
+						initialization_(initialization),
+						randomSeed_(randseed)
+{
+	std::cout<<"\n dim = "<<dim_<<" , mass = "<<mass<<" , tStepCount_/xStepCount_ "<<tStepCount_<<"/"<<xStepCount_<<"\n";
+
+	//CurrentStateCPU_= std::make_unique<float>(dim_*tStepCount_*xStepCount_);
+	//CurrentObservablesCPU_ = std::make_unique<float>(5);
+	//CurrentObservablesCPU= CurrentObservablesCPU_.get();
+	//CurrentStateCPU = CurrentStateCPU_.get();
+	
+	CurrentObservablesCPU= new float[latticeSize_];
+	CurrentStateCPU = new float[latticeSize_];
+
+	phiFourLatticeGPUConstructor();
+	
+	initializeLatticeCPU();
+
+}
+
+phiFourLattice::~phiFourLattice()
+{
+	delete CurrentObservablesCPU,CurrentObservablesCPU;
+	phiFourLatticeGPUDistructor();
+
+}
+
+void phiFourLattice::initializeLatticeCPU(int type,int randseed)
+{
+	if(initialization_ == 0)
+	{
+		for(int i=0;i<latticeSize_;i++)
+		{
+			CurrentObservablesCPU[i]=0.0;
+		}
+	
+	}
+	if(type ==1)
+	{
+		std::cout<<"\n Doing the hot initialization \n";
+		randomSeed_=randseed;
+		generator.seed(randomSeed_);
+
+		for(int i=0;i<latticeSize_;i++)
+		{
+			CurrentStateCPU[i]=dblDistribution(generator);
+			std::cout<<"  i = "<<i<<"  : "<<CurrentStateCPU[i]<<"\n";
+			}
+	}
+}
+
+void phiFourLattice::initializeLatticeCPU()
+{
+	if(initialization_ == 0)
+	{
+		for(int i=0;i<latticeSize_;i++)
+		{
+			CurrentStateCPU[i]=0.0;
+		}
+	
+	}
+}
+
+void phiFourLattice::printLatticeOnCPU()
+{
+	for(int i=0;i<latticeSize_;i++)
+	{
+		std::cout<< "  i =  "<<i<<" : " <<CurrentStateCPU[i]<<"\n";
+	}
+}
+
+
+
+
+ HOLattice::HOLattice(double mT,double wT ,int nT,double dx,int randseed,int skipSweepCount,int writeEventCount)
 		: N(nT),mTilda(mT), wTilda(wT),
 		  h(dx),idrate(0.8), xVec(N,0.0),
 		  skipSweepCount(skipSweepCount>-1 ? skipSweepCount : 0  ),writeOutCount(writeEventCount>-1 ? writeEventCount: 1),
@@ -18,7 +99,7 @@
 
 
 
-void lattice::initialize(string type)
+void HOLattice::initialize(string type)
 {
 	generator.seed(initializationSeed);
 
@@ -42,7 +123,7 @@ void lattice::initialize(string type)
 	fillBuff();
 }
 
-void lattice::printLattice(bool printLatticeSites)
+void HOLattice::printLattice(bool printLatticeSites)
 {
 	cout<<"Printing Lattice with : "<<"\n";
 	cout<<"              N  =  "<<N<<"\n";
@@ -65,7 +146,7 @@ void lattice::printLattice(bool printLatticeSites)
 	}
 }
 
-void lattice::findAction()
+void HOLattice::findAction()
 {
 	double a(0.0),b(0.0);
 	for(int i=0;i<N-1;i++)
@@ -80,7 +161,7 @@ void lattice::findAction()
 	action=0.5*mTilda*a+0.5*wTilda*b;
 }
 
-void lattice::populateRandomNumbers()
+void HOLattice::populateRandomNumbers()
 {
 	
 	for(int i=0;i<RAND_IDX_MAX;i++)
@@ -91,7 +172,7 @@ void lattice::populateRandomNumbers()
 	randIdCounter=0;
 }
 
-void lattice::takeSweep(int n)
+void HOLattice::takeSweep(int n)
 {
 	double percentStep=0.25;
 	int oneP=n*percentStep/100;
@@ -176,7 +257,7 @@ void lattice::takeSweep(int n)
 }
 
 
-void lattice::printToASCII(int n)
+void HOLattice::printToASCII(int n)
 {
 	if(n<0)
 		n=actiondata.size();
@@ -207,7 +288,7 @@ void lattice::printToASCII(int n)
 	file.close();
 }
 
-void lattice::fillBuff()
+void HOLattice::fillBuff()
 {
 	for(int i=0;i< xVec.size();i++)
 		xVecBuffer.push_back(xVec[i]);
@@ -217,14 +298,14 @@ void lattice::fillBuff()
 }
 
 
-void lattice::clearBuff()
+void HOLattice::clearBuff()
 {
 	actiondata.clear();
 	xVecBuffer.clear();
 	sweepCountData.clear();
 	stepCountData.clear();
 }
-void lattice::clearFile()
+void HOLattice::clearFile()
 {
 	cout<<"Purging : "<<oFileName<<"\n";
 	fstream file(oFileName.c_str(),ios::out);
