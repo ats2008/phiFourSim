@@ -27,7 +27,7 @@ class phiFourLattice : public Lattice {
 		constexpr static uint8_t DIMMAX =4;
 		
 		phiFourLattice(uint8_t dim=4,uint16_t tStepCount_=8,uint16_t xStepCount=8,
-				float mass=1,float lambda=1,uint8_t initialization=0,int randseed=0) ;
+				float mass=1,float lambda=1,uint8_t initialization=0,int randseed=0,int blockLen_=8) ;
 		~phiFourLattice();
 
 		void simplePrintfFromKernel();
@@ -39,6 +39,7 @@ class phiFourLattice : public Lattice {
 		void printLatticeOnGPU();
 		void printLatticeOnCPU();
 		void writeLatticeToASCII(string fname="LAT.txt");
+		void writeGPUlatticeLayoutToASCII(string fname="LAT.txt");
 		
 
 		void initializeLatticeCPU(int type,int randseed);
@@ -53,6 +54,8 @@ class phiFourLattice : public Lattice {
 		const uint32_t latticeSize_;	
 		const uint8_t initialization_;
 
+		const int blockLen_;
+		int gridLen_;
 		uint32_t randomSeed_;
 		RANDOM_ENGINE generator;	
 		uniform_int_distribution<int> intDistribution;	

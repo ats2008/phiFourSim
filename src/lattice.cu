@@ -64,6 +64,7 @@ void phiFourLattice::phiFourLatticeGPUConstructor()
 {
 	cudaMalloc(&CurrentObservablesGPU,latticeSize_);
 	cudaMalloc(&CurrentStateGPU,latticeSize_*sizeof(float));
+	cout<<" Allocated "<<latticeSize_*sizeof(float)/1024.0<<" Kb of DEVICE Memory for lattice \n";
 }
 void phiFourLattice::phiFourLatticeGPUDistructor()
 {
@@ -114,10 +115,8 @@ void phiFourLattice::printLatticeOnGPU()
 
 void phiFourLattice::doGPUlatticeUpdates( int numUpdates)
 {
-	const int blockLen = 2 ;
-	const int gridLen=( xStepCount_/blockLen );
-	dim3 blockSize(blockLen,blockLen,blockLen);
-	dim3 gridSize(gridLen,gridLen,gridLen);
+	dim3 blockSize(blockLen_,blockLen_,blockLen_);
+	dim3 gridSize(gridLen_,gridLen_,gridLen_);
  
 	std::cout<<"Launching the kerrnels for Lattice Size = "<<latticeSize_<<" ( t_d = "<<tStepCount_<<" x_d = "<<xStepCount_<<" & D = "<<dim_<<"\n"
 		 <<" with grid size : "<<gridSize.x<<" , "<<gridSize.y<<" , "<<gridSize.z<<"\n"

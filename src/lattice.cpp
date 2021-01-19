@@ -2,7 +2,7 @@
 
 
 phiFourLattice::phiFourLattice(uint8_t dim,uint16_t tStepCount,uint16_t xStepCount,
-				float mass,float lambda,uint8_t initialization,int randseed) :
+				float mass,float lambda,uint8_t initialization,int randseed,int blockLen) :
 						dim_(dim),
 						tStepCount_(tStepCount),
 						xStepCount_(xStepCount),
@@ -10,7 +10,8 @@ phiFourLattice::phiFourLattice(uint8_t dim,uint16_t tStepCount,uint16_t xStepCou
 						lambda_(lambda),
 						latticeSize_( dim_> 1 ? tStepCount_*pow(xStepCount_,dim_-1): 0),
 						initialization_(initialization),
-						randomSeed_(randseed)
+						randomSeed_(randseed),
+						blockLen_(blockLen)
 {
 	std::cout<<"\n dim = "<<dim_<<" ("<< dim <<")"<<" , mass = "<<mass
 				<<" , LATTICE SIZE = "<<latticeSize_
@@ -23,6 +24,8 @@ phiFourLattice::phiFourLattice(uint8_t dim,uint16_t tStepCount,uint16_t xStepCou
 	
 	CurrentObservablesCPU= new float[latticeSize_];
 	CurrentStateCPU = new float[latticeSize_];
+	gridLen_=( xStepCount_/blockLen );
+	cout<<" Allocated "<<latticeSize_*sizeof(float)/1024.0<<" Kb of HOST Memory for lattice \n";
 
 	phiFourLatticeGPUConstructor();
 	
@@ -98,59 +101,43 @@ void phiFourLattice::writeLatticeToASCII(string fname)
 
 	oFile.close();
 }
-void witeGPUlatticeLayoutToASCII()
+void phiFourLattice::writeGPUlatticeLayoutToASCII(string fname)
 {
+	fstream oFile(fname.c_str(),ios::out);
 
 	const int blockLenX(blockLen_),blockLenY(blockLen_),blockLenZ( blockLen_) ;
 	const int gridLenX(gridLen_)  ,gridLenY(gridLen_),  gridLenZ(gridLen_);
-
-	//assert(mode==0 or mode==1);
-	int tIdX =  ( threadIdx.x) ;
-	int tIdY =  ( threadIdx.y) ;
-	int tIdZ =  ( threadIdx.z) ;
+	const int xyzblockSize = blockLenX*blockLenY*blockLenZ;
 	
-//	int  xyzPos     = tIdX *gridDim.y*blockDim.y * gridDim.z*blockDim.z + tIdY * gridDim.z*blockDim.z+tIdZ;
+	oFile<<tStepCount_<<","<<xStepCount_<<","<<xStepCount_<<","<<xStepCount_<<"\n";
 	
 	for(auto bidX=0;bidX<gridLenX;bidX++)
-	for(auto bidX=0;bidX<gridLenX;bidX++)
-	for(auto bidX=0;bidX<gridLenX;bidX++)
+	for(auto bidY=0;bidY<gridLenY;bidY++)
+	for(auto bidZ=0;bidZ<gridLenZ;bidZ++)
 	{
 
-		for(auto thIdx=0;thidx<blockLenX;thidx++)
-		for(auto thIdx=0;thidx<blockLenX;thidx++)
-		for(auto thIdx=0;thidx<blockLenX;thidx++)
+		for(auto thIdx=0;thIdx<blockLenX;thIdx++)
+		for(auto thIdy=0;thIdy<blockLenY;thIdy++)
+		for(auto thIdz=0;thIdz<blockLenZ;thIdz++)
 		{
-			
+			auto xyzblockNumber = bidX*gridLenY*gridLenZ + bidY*gridLenZ + bidZ;
+			auto xyzPos         = ( xyzblockSize * xyzblockNumber * tStepCount_ ) 
+						+ thIdx*blockLenY*blockLenZ + thIdy*blockLenZ +thIdz ;
+		
+			auto x = bidX*blockLenX + thIdx ;
+			auto y = bidY*blockLenY + thIdy ;
+			auto z = bidZ*blockLenZ + thIdz ;
+
+			for(auto t=0;t<tStepCount_;t++)
+			{
+				auto pos = t*xyzblockSize + xyzPos ;
+				oFile<<pos<<"     ,     "<<t<<" , "<<x<<" , "<<y<<" , "<<z<<"      ,     "<<CurrentStateCPU[pos]<<"\n";
+			}
 		}
 
 	}
-	auto xyzblockSize   = blockDim.x*blockDim.y*blockDim.z;
-	auto xyzblockNumber = blockIdx.x*gridDim.y*gridDim.z + blockIdx.y*gridDim.z + blockIdx.z;
-	auto xyzPos         = ( xyzblockSize * xyzblockNumber * tStepCount_ ) 
-				+ threadIdx.x*blockDim.y*blockDim.z + threadIdx.y*blockDim.z +threadIdx.z ;
-		
-	//auto gridOffset   = gridDim.x*blockDim.x * gridDim.y*blockDim.y * gridDim.z*blockDim.z;
-	auto tId = (threadIdx.x + threadIdx.y + threadIdx.z ) % 2 ;
 	
-	if( mode==1 && tId==0 ) tId=1;
-	else if( mode==1 && tId==1 ) tId=0;
-	
-	// if(mode==0 && tId==0 ) tId=0;
-	// if(mode==0 && tId==1 ) tId=1;
-	
-	while(tId<tStepCount_)
-	{
-		
-		auto posIdx= tId*xyzblockSize + xyzPos ;
-		latticeArray[posIdx]=tempAssignNumber;
-		
-		printf("xyzblockSize = %d, posIdx =%d, tID = %d ,xyzblockNumber = %d ,xyzPos = %d [ tIdX %d, tIdY %d, tIdZ %d , bidX:%d, bidY:%d, bidZ:%d ] latticeArray[%d] -> %f \n ",
-						xyzblockSize,posIdx,tId,xyzblockNumber,xyzPos,tIdX,tIdY,tIdZ,blockIdx.x,blockIdx.y,blockIdx.z,posIdx,latticeArray[posIdx]);
-		
-		//assert(posIdx < NTot );
-		
-	 	tId+=2; 	
-	}
+	oFile.close();
 }
 
 
