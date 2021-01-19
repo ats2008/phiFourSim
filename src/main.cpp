@@ -27,7 +27,7 @@ int main(int argc,char *argv[])
 	//lattice(double mT=1,double wT=1,int nT=120,double dx=1.0,int randseed=0,int skipSweepCount=-1,int writeEventCount=128);
 //	phiFourLattice(uint8_t dim=4,uint16_t tStepCount_=8,uint16_t xStepCount=8,
 //				float mass=1,float lambda=1,uint8_t initialization=0,int randseed=0) ;
-	phiFourLattice alat(4,8,8);
+	phiFourLattice alat(4,4,4);
 	
 	printf("HAHA IN MAIN\n");
 	//alat.simplePrintfFromKernel();

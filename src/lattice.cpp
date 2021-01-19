@@ -86,7 +86,7 @@ void phiFourLattice::writeLatticeToASCII(string fname)
 {
 	fstream oFile(fname.c_str(),ios::out);
 
-	
+	oFile<<tStepCount_<<","<<xStepCount_<<","<<xStepCount_<<","<<xStepCount_<<"\n";
 	for(int i=0;i<tStepCount_;i++)
 	for(int j=0;j<xStepCount_;j++)
 	for(int k=0;k<xStepCount_;k++)
@@ -98,7 +98,81 @@ void phiFourLattice::writeLatticeToASCII(string fname)
 
 	oFile.close();
 }
+void witeGPUlatticeLayoutToASCII()
+{
 
+	const int blockLenX(blockLen_),blockLenY(blockLen_),blockLenZ( blockLen_) ;
+	const int gridLenX(gridLen_)  ,gridLenY(gridLen_),  gridLenZ(gridLen_);
+
+	//assert(mode==0 or mode==1);
+	int tIdX =  ( threadIdx.x) ;
+	int tIdY =  ( threadIdx.y) ;
+	int tIdZ =  ( threadIdx.z) ;
+	
+//	int  xyzPos     = tIdX *gridDim.y*blockDim.y * gridDim.z*blockDim.z + tIdY * gridDim.z*blockDim.z+tIdZ;
+	
+	for(auto bidX=0;bidX<gridLenX;bidX++)
+	for(auto bidX=0;bidX<gridLenX;bidX++)
+	for(auto bidX=0;bidX<gridLenX;bidX++)
+	{
+
+		for(auto thIdx=0;thidx<blockLenX;thidx++)
+		for(auto thIdx=0;thidx<blockLenX;thidx++)
+		for(auto thIdx=0;thidx<blockLenX;thidx++)
+		{
+			
+		}
+
+	}
+	auto xyzblockSize   = blockDim.x*blockDim.y*blockDim.z;
+	auto xyzblockNumber = blockIdx.x*gridDim.y*gridDim.z + blockIdx.y*gridDim.z + blockIdx.z;
+	auto xyzPos         = ( xyzblockSize * xyzblockNumber * tStepCount_ ) 
+				+ threadIdx.x*blockDim.y*blockDim.z + threadIdx.y*blockDim.z +threadIdx.z ;
+		
+	//auto gridOffset   = gridDim.x*blockDim.x * gridDim.y*blockDim.y * gridDim.z*blockDim.z;
+	auto tId = (threadIdx.x + threadIdx.y + threadIdx.z ) % 2 ;
+	
+	if( mode==1 && tId==0 ) tId=1;
+	else if( mode==1 && tId==1 ) tId=0;
+	
+	// if(mode==0 && tId==0 ) tId=0;
+	// if(mode==0 && tId==1 ) tId=1;
+	
+	while(tId<tStepCount_)
+	{
+		
+		auto posIdx= tId*xyzblockSize + xyzPos ;
+		latticeArray[posIdx]=tempAssignNumber;
+		
+		printf("xyzblockSize = %d, posIdx =%d, tID = %d ,xyzblockNumber = %d ,xyzPos = %d [ tIdX %d, tIdY %d, tIdZ %d , bidX:%d, bidY:%d, bidZ:%d ] latticeArray[%d] -> %f \n ",
+						xyzblockSize,posIdx,tId,xyzblockNumber,xyzPos,tIdX,tIdY,tIdZ,blockIdx.x,blockIdx.y,blockIdx.z,posIdx,latticeArray[posIdx]);
+		
+		//assert(posIdx < NTot );
+		
+	 	tId+=2; 	
+	}
+}
+
+
+
+/*
+void phiFourLattice::writeLatticeToASCII(string fname)
+{
+	fstream oFile(fname.c_str(),ios::out);
+
+	oFile<<tStepCount_<<","<<xStepCount_<<","<<xStepCount_<<","<<xStepCount_<<"\n";
+	for(int i=0;i<tStepCount_;i++)
+	for(int j=0;j<xStepCount_;j++)
+	for(int k=0;k<xStepCount_;k++)
+	for(int l=0;l<xStepCount_;l++)
+	{
+		auto pos =int(i*pow(xStepCount_,3) +  j*pow(xStepCount_,2) + k*pow(xStepCount_,1) +l );
+		oFile<<pos<<"     ,     "<<i<<" , "<<j<<" , "<<k<<" , "<<l<<"      ,     "<<CurrentStateCPU[pos]<<"\n";
+	}
+
+	oFile.close();
+}
+*/
 
 
 

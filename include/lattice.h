@@ -46,7 +46,7 @@ class phiFourLattice : public Lattice {
 
 	private :
 		
-		const uint8_t dim_;
+		const int dim_;
 		const uint16_t tStepCount_;
 		const uint16_t xStepCount_;
 		const float m_,lambda_;
