@@ -28,6 +28,7 @@ int main(int argc,char *argv[])
 //	phiFourLattice(uint8_t dim=4,uint16_t tStepCount_=8,uint16_t xStepCount=8,
 //				float mass=1,float lambda=1,uint8_t initialization=0,int randseed=0, int blockLen) ;
 	phiFourLattice alat(4,16,16,1.0,1.0,0,0, 8 );
+	//phiFourLattice alat(4,4,4,1.0,1.0,0,0, 2 );
 	
 	printf("HAHA IN MAIN\n");
 	//alat.simplePrintfFromKernel();
