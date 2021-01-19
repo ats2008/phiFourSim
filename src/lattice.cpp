@@ -80,7 +80,26 @@ void phiFourLattice::printLatticeOnCPU()
 }
 
 
+void phiFourLattice::writeLatticeToASCII(string fname)
+{
+	fstream oFile(fname.c_str(),ios::out);
 
+	
+	for(int i=0;i<tStepCount_;i++)
+	for(int j=0;j<xStepCount_;j++)
+	for(int k=0;k<xStepCount_;k++)
+	for(int l=0;l<xStepCount_;l++)
+	{
+		auto pos =int(i*pow(xStepCount_,3) +  j*pow(xStepCount_,2) + k*pow(xStepCount_,1) +l );
+		oFile<<pos<<"     ,     "<<i<<" , "<<j<<" , "<<k<<" , "<<l<<"      ,      "<<CurrentStateGPU[pos]<<"\n";
+	
+
+	}
+}
+
+
+
+/// Code for the Harmonic Oscilator Problem
 
  HOLattice::HOLattice(double mT,double wT ,int nT,double dx,int randseed,int skipSweepCount,int writeEventCount)
 		: N(nT),mTilda(mT), wTilda(wT),

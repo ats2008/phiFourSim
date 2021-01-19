@@ -38,12 +38,15 @@ int main(int argc,char *argv[])
 	alat.copyStateInCPUtoGPU();
 		
 	printf("\n Printing the lattice after the reinitialization !! \n ");
-	alat.printLatticeOnCPU();
+	//alat.printLatticeOnCPU();
 	printf("\n Printing the lattice  on  gpu after the copy !! \n ");
-	alat.printLatticeOnGPU();
+	//alat.printLatticeOnGPU();
 	printf("\n Printing the lattice after the reinitialization and copy !! \n ");
-	alat.printLatticeOnCPU();
+	//alat.printLatticeOnCPU();
 	
+	alat.doGPUlatticeUpdates(2);
+	alat.copyStateToGPUtoCPU();
+	alat.writeLatticeToASCII("alattice.txt");
 
 	return 0;
 }

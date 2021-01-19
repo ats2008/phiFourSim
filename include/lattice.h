@@ -26,7 +26,7 @@ class phiFourLattice : public Lattice {
 		
 		constexpr static uint8_t DIMMAX =4;
 		
-		phiFourLattice(uint8_t dim=2,uint16_t tStepCount_=4,uint16_t xStepCount=4,
+		phiFourLattice(uint8_t dim=4,uint16_t tStepCount_=8,uint16_t xStepCount=8,
 				float mass=1,float lambda=1,uint8_t initialization=0,int randseed=0) ;
 		~phiFourLattice();
 
@@ -38,7 +38,12 @@ class phiFourLattice : public Lattice {
 		void copyObservalblesInCPUToGPU();
 		void printLatticeOnGPU();
 		void printLatticeOnCPU();
+		void writeLatticeToASCII(string fname="LAT.txt");
+		
+
 		void initializeLatticeCPU(int type,int randseed);
+		void doGPUlatticeUpdates(int numUpdates=1);
+
 	private :
 		
 		const uint8_t dim_;
