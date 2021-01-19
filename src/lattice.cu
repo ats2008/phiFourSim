@@ -5,8 +5,8 @@
 
 __global__ void testrun()
 {
-	int tid = blockDim.x * blockIdx.x + threadIdx.x;
-	printf("tid : %d \n",tid);
+	int tId = blockDim.x * blockIdx.x + threadIdx.x;
+	printf("tId : %d \n",tId);
 	return;
 }
 
@@ -22,36 +22,43 @@ __global__ void printLattice(float * lattice,uint16_t l1,uint16_t lTotal)
 }
 
 
-__global__ void checkBoardUpdate(float* latticeArray,short mode,float tempAssignNumber, int tStepCount_, const int NTot)
+__global__ void checkBoardUpdate(float* latticeArray,int mode,float tempAssignNumber, int tStepCount_, const int NTot)
 {
 	//assert(mode==0 or mode==1);
-	int tidX =  2*(blockDim.x * blockIdx.x + threadIdx.x) + mode;
-	int tidY =  2*(blockDim.y * blockIdx.y + threadIdx.y) + mode;
-	int tidZ =  2*(blockDim.z * blockIdx.z + threadIdx.z) + mode;
+	int tIdX =  (blockDim.x * blockIdx.x + threadIdx.x) ;
+	int tIdY =  (blockDim.y * blockIdx.y + threadIdx.y) ;
+	int tIdZ =  (blockDim.z * blockIdx.z + threadIdx.z) ;
 	
-	int xyzPos = tidX * gridDim.y*blockDim.y * gridDim.z*blockDim.z + tidY * gridDim.z*blockDim.z+tidZ;
-
-	auto gridOffset =gridDim.x*blockDim.x * gridDim.y*blockDim.y * gridDim.z*blockDim.z;
+	int  xyzPos     = tIdX *gridDim.y*blockDim.y * gridDim.z*blockDim.z + tIdY * gridDim.z*blockDim.z+tIdZ;
 	
-
-	int tId=mode;
+	auto gridOffset = gridDim.x*blockDim.x * gridDim.y*blockDim.y * gridDim.z*blockDim.z;
+	
+	auto tId        = (tIdX + tIdY + tIdZ )%2 ;
+	
+	if( mode==1 && tId==0 ) tId=1;
+	if( mode==1 && tId==1 ) tId=0;
+	// if(mode==0 && tId==0 ) tId=0;
+	// if(mode==0 && tId==1 ) tId=1;
+	
 	while(tId<tStepCount_)
 	{
 		
 		auto posIdx= tId*gridOffset + xyzPos ;
-		printf("grid offset = %d, posidx =%d tID = %d , xyzPos = %d [%d,%d,%d] \n ",gridOffset,posIdx,tId,xyzPos,tidX,tidY,tidZ);
-		
-		//assert(posIdx < NTot );
 		latticeArray[posIdx]=tempAssignNumber;
 		
-	tId+=2; 	
+		printf("grid offset = %d, posidx =%d tID = %d , xyzPos = %d [ tIdX %d, tIdY %d, tIdZ %d ] [ bidX:%d, bidY:%d, bidZ:%d ] latticeArray[%d] -> %f \n ",
+						gridOffset,posIdx,tId,xyzPos,tIdX,tIdY,tIdZ,blockIdx.x,blockIdx.y,blockIdx.z,posIdx,latticeArray[posIdx]);
+		
+		//assert(posIdx < NTot );
+		
+	 	tId+=2; 	
 	}
 }
 
 void phiFourLattice::phiFourLatticeGPUConstructor()
 {
 	cudaMalloc(&CurrentObservablesGPU,latticeSize_);
-	cudaMalloc(&CurrentStateGPU,latticeSize_);
+	cudaMalloc(&CurrentStateGPU,latticeSize_*sizeof(float));
 }
 void phiFourLattice::phiFourLatticeGPUDistructor()
 {
@@ -66,7 +73,7 @@ void phiFourLattice::simplePrintfFromKernel()
 	testrun<<<5,2>>>();
 	printf("haha leaving the wraper \n");
 
-	cudaThreadSynchronize();
+	cudaDeviceSynchronize();
 }
 void phiFourLattice::initializeLatticeGPU()
 {
@@ -76,11 +83,12 @@ void phiFourLattice::initializeLatticeGPU()
 void phiFourLattice::copyStateInCPUtoGPU()
 {
 	std::cout<<"\n Copying to the GPU \n";
-	cudaMemcpy(CurrentStateGPU,CurrentStateCPU,latticeSize_,cudaMemcpyHostToDevice); 	
+	cudaMemcpy(CurrentStateGPU,CurrentStateCPU,latticeSize_*sizeof(float),cudaMemcpyHostToDevice); 	
 }
-void phiFourLattice::copyStateToGPUtoCPU()
+void phiFourLattice::copyStateInGPUtoCPU()
 {
-	cudaMemcpy(CurrentStateGPU,CurrentStateCPU,latticeSize_,cudaMemcpyDeviceToHost); 	
+	cout<<"\n\n latticeSize_*sizeof(float) = "<<latticeSize_<<" * "<<sizeof(float)<<"\n\n";
+	cudaMemcpy(CurrentStateCPU,CurrentStateGPU,latticeSize_*sizeof(float),cudaMemcpyDeviceToHost); 	
 }
 void phiFourLattice::copyObservalblesInGPUToaCPU()
 {
@@ -96,18 +104,23 @@ void phiFourLattice::printLatticeOnGPU()
 	int numberOfBlocks=latticeSize_/tStepCount_ + 1;
 	int threadsPerBlock=tStepCount_;
 	printLattice<<<numberOfBlocks,threadsPerBlock  >>>(CurrentStateGPU,xStepCount_,latticeSize_);
-	cudaThreadSynchronize();
+	cudaDeviceSynchronize();
 }
 
 void phiFourLattice::doGPUlatticeUpdates( int numUpdates)
 {
-	dim3 gridSize(2,2,2);
-	dim3 blockSize(2,2,2);
-
-	std::cout<<"\n Launching the kerrnels for Lattice Size = "<<latticeSize_<<" ( t_d = "<<tStepCount_<<" x_d = "<<xStepCount_<<" & D = "<<dim_<<"\n";
-	checkBoardUpdate<<<gridSize,blockSize,0>>>( CurrentStateGPU , 0 , 1.0,tStepCount_ ,latticeSize_ );
-	checkBoardUpdate<<<gridSize,blockSize,0>>>( CurrentStateGPU , 1 , 2.0,tStepCount_ ,latticeSize_ );
+	const int blockLen=4 ; //8 ;
+	const int gridLen=( xStepCount_/blockLen );
+	dim3 blockSize(blockLen,blockLen,blockLen);
+	dim3 gridSize(gridLen,gridLen,gridLen);
+ 
+	std::cout<<"Launching the kerrnels for Lattice Size = "<<latticeSize_<<" ( t_d = "<<tStepCount_<<" x_d = "<<xStepCount_<<" & D = "<<dim_<<"\n"
+		 <<" with grid size : "<<gridSize.x<<" , "<<gridSize.y<<" , "<<gridSize.z<<"\n"
+		 <<" and block size : "<<blockSize.x<<" , "<<blockSize.y<<" , "<<blockSize.z<<"\n";	
+	checkBoardUpdate<<<gridSize,blockSize>>>( CurrentStateGPU , 0 , 1.0,tStepCount_ ,latticeSize_ );
 	cudaThreadSynchronize();
+	checkBoardUpdate<<<gridSize,blockSize>>>( CurrentStateGPU , 1 , 2.0,tStepCount_ ,latticeSize_ );
+	cudaDeviceSynchronize();
 }
 
 

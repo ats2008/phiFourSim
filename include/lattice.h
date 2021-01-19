@@ -33,7 +33,7 @@ class phiFourLattice : public Lattice {
 		void simplePrintfFromKernel();
 		
 		void copyStateInCPUtoGPU();
-		void copyStateToGPUtoCPU();
+		void copyStateInGPUtoCPU();
 		void copyObservalblesInGPUToaCPU();
 		void copyObservalblesInCPUToGPU();
 		void printLatticeOnGPU();

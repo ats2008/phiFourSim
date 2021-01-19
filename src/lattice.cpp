@@ -12,7 +12,9 @@ phiFourLattice::phiFourLattice(uint8_t dim,uint16_t tStepCount,uint16_t xStepCou
 						initialization_(initialization),
 						randomSeed_(randseed)
 {
-	std::cout<<"\n dim = "<<dim_<<" , mass = "<<mass<<" , tStepCount_/xStepCount_ "<<tStepCount_<<"/"<<xStepCount_<<"\n";
+	std::cout<<"\n dim = "<<dim_<<" ("<< dim <<")"<<" , mass = "<<mass
+				<<" , LATTICE SIZE = "<<latticeSize_
+				<<" , tStepCount_/xStepCount_ "<<tStepCount_<<"/"<<xStepCount_<<"\n";
 
 	//CurrentStateCPU_= std::make_unique<float>(dim_*tStepCount_*xStepCount_);
 	//CurrentObservablesCPU_ = std::make_unique<float>(5);
@@ -47,14 +49,14 @@ void phiFourLattice::initializeLatticeCPU(int type,int randseed)
 	}
 	if(type ==1)
 	{
-		std::cout<<"\n Doing the hot initialization \n";
+		//std::cout<<"\n Doing the hot initialization \n";
 		randomSeed_=randseed;
 		generator.seed(randomSeed_);
 
 		for(int i=0;i<latticeSize_;i++)
 		{
 			CurrentStateCPU[i]=dblDistribution(generator);
-			std::cout<<"  i = "<<i<<"  : "<<CurrentStateCPU[i]<<"\n";
+		//	std::cout<<"  i = "<<i<<"  : "<<CurrentStateCPU[i]<<"\n";
 			}
 	}
 }
@@ -91,11 +93,57 @@ void phiFourLattice::writeLatticeToASCII(string fname)
 	for(int l=0;l<xStepCount_;l++)
 	{
 		auto pos =int(i*pow(xStepCount_,3) +  j*pow(xStepCount_,2) + k*pow(xStepCount_,1) +l );
-		oFile<<pos<<"     ,     "<<i<<" , "<<j<<" , "<<k<<" , "<<l<<"      ,      "<<CurrentStateGPU[pos]<<"\n";
-	
-
+		oFile<<pos<<"     ,     "<<i<<" , "<<j<<" , "<<k<<" , "<<l<<"      ,     "<<CurrentStateCPU[pos]<<"\n";
 	}
+
+	oFile.close();
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
