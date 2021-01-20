@@ -3,9 +3,16 @@
 #include<random>
 #include<fstream>
 #include <memory>
+#include <cuda.h>
+#include <cuda_runtime.h>
+#include <curand.h>
+#include <curand_kernel.h>
+
 
 #define RANDOM_ENGINE mt19937_64
 #define RAND_IDX_MAX 512
+
+#define MAX_RGEN_STEP 1024
 
 #define SWEEP_COUNT 10000
 
@@ -56,16 +63,26 @@ class phiFourLattice : public Lattice {
 
 		const int blockLen_;
 		int gridLen_;
+		
 		uint32_t randomSeed_;
 		RANDOM_ENGINE generator;	
 		uniform_int_distribution<int> intDistribution;	
 		uniform_real_distribution<double> dblDistribution;	
+	
+		float * gpuUniforRealRandomBank;
+		curandState *RNG_State;
+		const int maxStepCountForSingleRandomNumberFill;
+		int currentStep;
+		void fillGPURandomNumberBank();
 
+		const int bufferSize,obsevablesCount;
 		std::unique_ptr<float> CurrentStateCPU_;
 		std::unique_ptr<float> CurrentObservablesCPU_;
 		float *CurrentStateCPU,*CurrentObservablesCPU;
 		float *CurrentStateGPU,*CurrentObservablesGPU;
-
+		float *StatesBufferCPU,*ObservablesBufferCPU;
+		float *StatesBufferGPU,*ObservablesBufferGPU;
+		
 		void initializeLatticeCPU();
 		void initializeLatticeGPU();
 

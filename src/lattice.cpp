@@ -11,7 +11,11 @@ phiFourLattice::phiFourLattice(uint8_t dim,uint16_t tStepCount,uint16_t xStepCou
 						latticeSize_( dim_> 1 ? tStepCount_*pow(xStepCount_,dim_-1): 0),
 						initialization_(initialization),
 						randomSeed_(randseed),
-						blockLen_(blockLen)
+						blockLen_(blockLen),
+						maxStepCountForSingleRandomNumberFill(MAX_RGEN_STEP),
+						currentStep(0),
+						bufferSize(1024),
+						obsevablesCount(5)
 {
 	std::cout<<"\n dim = "<<dim_<<" ("<< dim <<")"<<" , mass = "<<mass
 				<<" , LATTICE SIZE = "<<latticeSize_
@@ -22,10 +26,14 @@ phiFourLattice::phiFourLattice(uint8_t dim,uint16_t tStepCount,uint16_t xStepCou
 	//CurrentObservablesCPU= CurrentObservablesCPU_.get();
 	//CurrentStateCPU = CurrentStateCPU_.get();
 	
-	CurrentObservablesCPU= new float[latticeSize_];
-	CurrentStateCPU = new float[latticeSize_];
+	StatesBufferCPU       = new float[latticeSize_*bufferSize];
+	ObservablesBufferCPU  = new float[obsevablesCount * bufferSize];
+	CurrentStateCPU       = StatesBufferCPU;
+	CurrentObservablesCPU = ObservablesBufferCPU;
+
+
 	gridLen_=( xStepCount_/blockLen );
-	cout<<" Allocated "<<latticeSize_*sizeof(float)/1024.0<<" Kb of HOST Memory for lattice \n";
+	cout<<" Allocated "<<bufferSize*latticeSize_*sizeof(float)/1024.0<<" Kb of HOST Memory for lattice \n";
 
 	phiFourLatticeGPUConstructor();
 	
@@ -36,7 +44,7 @@ phiFourLattice::phiFourLattice(uint8_t dim,uint16_t tStepCount,uint16_t xStepCou
 phiFourLattice::~phiFourLattice()
 {
 	delete CurrentObservablesCPU,CurrentObservablesCPU;
-	phiFourLatticeGPUDistructor();
+	//phiFourLatticeGPUDistructor();
 
 }
 
@@ -46,7 +54,7 @@ void phiFourLattice::initializeLatticeCPU(int type,int randseed)
 	{
 		for(int i=0;i<latticeSize_;i++)
 		{
-			CurrentObservablesCPU[i]=0.0;
+			CurrentStateCPU[i]=0.0;
 		}
 	
 	}
