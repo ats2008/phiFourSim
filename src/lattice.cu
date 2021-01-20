@@ -232,7 +232,7 @@ void phiFourLattice::phiFourLatticeGPUConstructor()
 	
 	cout<<" Allocated "<<bufferSize*latticeSize_*sizeof(float)/1024.0/1024.0<<" MB of DEVICE Memory for lattice ( buffer size :  "<<bufferSize<<" ) \n";
 	cout<<" Allocated "<<bufferSize*obsevablesCount*sizeof(float)/1024.0/1024.0<<" MB of DEVICE Memory for obsevables ( buffer size :  "<<bufferSize<<" @ "<<obsevablesCount<<" ) \n";
-	cout<<" Allocated "<<latticeSize_/1024.0/1024.0<<" MB of DEVICE Memory for  RNG_State \n";
+	cout<<" Allocated "<<latticeSize_*sizeof(curandState)/1024.0/1024.0<<" MB of DEVICE Memory for  RNG_State \n";
 	cout<<" Allocated "<<RNG_bankSize*sizeof(float)/1024.0/1024.0<<" MB of DEVICE Memory for  gpuUniforRealRandomBank \n";
 }
 

@@ -33,7 +33,7 @@ phiFourLattice::phiFourLattice(uint8_t dim,uint16_t tStepCount,uint16_t xStepCou
 
 
 	gridLen_=( xStepCount_/blockLen );
-	cout<<" Allocated "<<bufferSize*latticeSize_*sizeof(float)/1024.0<<" Kb of HOST Memory for lattice \n";
+	cout<<" Allocated "<<bufferSize*latticeSize_*sizeof(float)/1024.0/1024<<" MB of HOST Memory for lattice \n";
 
 	phiFourLatticeGPUConstructor();
 	
