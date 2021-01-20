@@ -1,13 +1,13 @@
-INCPATH 	= include
+INCPATH 	= -Iinclude -I/usr/local/cuda/include
 OBJ		= obj
 SRC		= src
 
 CXX 		= g++
 NVCC 		= nvcc
 
-LIBS		= -lm
-CXXFLAGS 	= -std=c++11 -I$(INCPATH) 
-NVCCFLAGS	= -std=c++11 -I$(INCPATH)
+LIBS		= -lm -lcudart
+CXXFLAGS 	= -std=c++11 $(INCPATH) -g
+NVCCFLAGS	= -std=c++11 $(INCPATH) -g -G
 NVCCLIBS	= -lcudart
 
 TARGET		= main.exe
