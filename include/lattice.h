@@ -34,7 +34,7 @@ class phiFourLattice : public Lattice {
 		constexpr static uint8_t DIMMAX =4;
 		
 		phiFourLattice(uint8_t dim=4,uint16_t tStepCount_=8,uint16_t xStepCount=8,
-				float mass=1,float lambda=1,uint8_t initialization=0,int randseed=0,int blockLen_=8) ;
+				float mass=1,float lambda=1,string label="blattice", uint8_t initialization=0,int randseed=0,int blockLen_=8) ;
 		~phiFourLattice();
 
 		void simplePrintfFromKernel();
@@ -43,24 +43,27 @@ class phiFourLattice : public Lattice {
 		void copyStateInGPUtoCPU();
 		void copyObservalblesInGPUToaCPU();
 		void copyObservalblesInCPUToGPU();
+		void copyBufferToCPU(int begi=0,int end=1);
 		void printLatticeOnGPU();
 		void printLatticeOnCPU();
 		void writeLatticeToASCII(string fname="LAT.txt");
 		void writeGPUlatticeLayoutToASCII(string fname="LAT.txt");
-		
+		void writeBufferToFileGPULayout(string fname="LATbuff.txt",int beg=0,int end=1 );	
 
 		void initializeLatticeCPU(int type,int randseed);
-		void doGPUlatticeUpdates(int numUpdates=1);
+		void doGPUlatticeUpdates(int numUpdates=1,bool copyToCPU=false);
 
 	private :
 		
+		const string latticeLabel;
 		const int dim_;
 		const uint16_t tStepCount_;
 		const uint16_t xStepCount_;
 		const float m_,lambda_;
 		const uint32_t latticeSize_;	
 		const uint8_t initialization_;
-
+		const int writeFileMax;
+		      int writeFileCount;
 		const int blockLen_;
 		int gridLen_;
 		
@@ -76,13 +79,16 @@ class phiFourLattice : public Lattice {
 		void fillGPURandomNumberBank();
 
 		const int bufferSize,obsevablesCount;
+		int currentBufferPosGPU,currentBufferPosCPU;
 		std::unique_ptr<float> CurrentStateCPU_;
 		std::unique_ptr<float> CurrentObservablesCPU_;
 		float *CurrentStateCPU,*CurrentObservablesCPU;
 		float *CurrentStateGPU,*CurrentObservablesGPU;
-		float *StatesBufferCPU,*ObservablesBufferCPU;
+		float *StatesBufferCPU,*ObservablesBufferCPU,*EnergyBufferCPU;
 		float *StatesBufferGPU,*ObservablesBufferGPU;
 		
+		float *gpuDeltaEworkspace;
+
 		void initializeLatticeCPU();
 		void initializeLatticeGPU();
 

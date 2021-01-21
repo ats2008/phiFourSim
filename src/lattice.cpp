@@ -2,7 +2,8 @@
 
 
 phiFourLattice::phiFourLattice(uint8_t dim,uint16_t tStepCount,uint16_t xStepCount,
-				float mass,float lambda,uint8_t initialization,int randseed,int blockLen) :
+				float mass,float lambda,string label ,uint8_t initialization,int randseed,int blockLen) :
+						latticeLabel(label),
 						dim_(dim),
 						tStepCount_(tStepCount),
 						xStepCount_(xStepCount),
@@ -15,7 +16,11 @@ phiFourLattice::phiFourLattice(uint8_t dim,uint16_t tStepCount,uint16_t xStepCou
 						maxStepCountForSingleRandomNumberFill(MAX_RGEN_STEP),
 						currentStep(0),
 						bufferSize(1024),
-						obsevablesCount(5)
+						obsevablesCount(5),
+						currentBufferPosGPU(0),
+						currentBufferPosCPU(0),
+						writeFileMax(256),
+						writeFileCount(0)
 {
 	std::cout<<"\n dim = "<<dim_<<" ("<< dim <<")"<<" , mass = "<<mass
 				<<" , LATTICE SIZE = "<<latticeSize_
@@ -28,12 +33,15 @@ phiFourLattice::phiFourLattice(uint8_t dim,uint16_t tStepCount,uint16_t xStepCou
 	
 	StatesBufferCPU       = new float[latticeSize_*bufferSize];
 	ObservablesBufferCPU  = new float[obsevablesCount * bufferSize];
+	EnergyBufferCPU        = new float[bufferSize];
 	CurrentStateCPU       = StatesBufferCPU;
 	CurrentObservablesCPU = ObservablesBufferCPU;
 
 
 	gridLen_=( xStepCount_/blockLen );
 	cout<<" Allocated "<<bufferSize*latticeSize_*sizeof(float)/1024.0/1024<<" MB of HOST Memory for lattice \n";
+	cout<<" Allocated "<<bufferSize*obsevablesCount*sizeof(float)/1024.0/1024<<" MB of HOST Memory for observable buffer \n";
+	cout<<" Allocated "<<bufferSize*sizeof(float)/1024.0/1024<<" MB of HOST Memory for Energy buffer \n";
 
 	phiFourLatticeGPUConstructor();
 	
@@ -43,8 +51,10 @@ phiFourLattice::phiFourLattice(uint8_t dim,uint16_t tStepCount,uint16_t xStepCou
 
 phiFourLattice::~phiFourLattice()
 {
-	delete CurrentObservablesCPU,CurrentObservablesCPU;
-	//phiFourLatticeGPUDistructor();
+	delete[] StatesBufferCPU;
+	delete[] ObservablesBufferCPU;
+	delete[] EnergyBufferCPU;
+	phiFourLatticeGPUDistructor();
 
 }
 
@@ -109,6 +119,7 @@ void phiFourLattice::writeLatticeToASCII(string fname)
 
 	oFile.close();
 }
+
 void phiFourLattice::writeGPUlatticeLayoutToASCII(string fname)
 {
 	fstream oFile(fname.c_str(),ios::out);
@@ -149,6 +160,79 @@ void phiFourLattice::writeGPUlatticeLayoutToASCII(string fname)
 }
 
 
+void phiFourLattice::writeBufferToFileGPULayout(string fname,int beg,int end)
+{
+	const int blockLenX(blockLen_),blockLenY(blockLen_),blockLenZ( blockLen_) ;
+	const int gridLenX(gridLen_)  ,gridLenY(gridLen_),  gridLenZ(gridLen_);
+	const int xyzblockSize = blockLenX*blockLenY*blockLenZ;
+			
+	writeFileCount++;
+	fname=latticeLabel;
+	fstream	oFile((fname+"_"+to_string(writeFileCount)+".txt").c_str(),ios::out);
+	fstream oObsFile(("obs_"+fname+"_"+to_string(writeFileCount)+".txt").c_str(),ios::out);
+	
+	oFile<<tStepCount_<<","<<xStepCount_<<","<<xStepCount_<<","<<xStepCount_<<"\n";
+	oObsFile<<tStepCount_<<","<<xStepCount_<<","<<xStepCount_<<","<<xStepCount_<<"\n";
+	oObsFile<<obsevablesCount<<"\n";
+	
+	cout<<"Writing out buffer from "<<beg<<"  to  "<<end<<"\n";
+	int wcount=0;
+	for(int i=0;i<(end-beg);i++)
+	{
+		if(wcount== writeFileMax)
+		{
+			writeFileCount++;
+			wcount=0;
+			
+			oFile.close();
+			oFile.open((fname+"_"+to_string(writeFileCount)+".txt").c_str(),ios::out);
+			oObsFile.close();
+			oObsFile.open(("obs_"+fname+"_"+to_string(writeFileCount)+".txt").c_str(),ios::out);
+			
+			oFile<<tStepCount_<<","<<xStepCount_<<","<<xStepCount_<<","<<xStepCount_<<"\n";
+			oObsFile<<tStepCount_<<","<<xStepCount_<<","<<xStepCount_<<","<<xStepCount_<<"\n";
+			oObsFile<<obsevablesCount<<"\n";
+			}
+		wcount++;
+		auto offset = latticeSize_*i;
+		oFile<<"!"<<i<<"\n";
+		for(auto bidX=0;bidX<gridLenX;bidX++)
+		for(auto bidY=0;bidY<gridLenY;bidY++)
+		for(auto bidZ=0;bidZ<gridLenZ;bidZ++)
+		{
+
+			for(auto thIdx=0;thIdx<blockLenX;thIdx++)
+			for(auto thIdy=0;thIdy<blockLenY;thIdy++)
+			for(auto thIdz=0;thIdz<blockLenZ;thIdz++)
+			{
+				auto xyzblockNumber = bidX*gridLenY*gridLenZ + bidY*gridLenZ + bidZ;
+				auto xyzPos         = ( xyzblockSize * xyzblockNumber * tStepCount_ ) 
+							+ thIdx*blockLenY*blockLenZ + thIdy*blockLenZ +thIdz ;
+			
+				auto x = bidX*blockLenX + thIdx ;
+				auto y = bidY*blockLenY + thIdy ;
+				auto z = bidZ*blockLenZ + thIdz ;
+
+				for(auto t=0;t<tStepCount_;t++)
+				{
+					auto pos = t*xyzblockSize + xyzPos ;
+					oFile<<pos<<"     ,     "<<t<<" , "<<x<<" , "<<y<<" , "<<z<<"      ,     "<<StatesBufferCPU[pos+offset]<<"\n";
+				}
+			}
+
+		}
+		oObsFile<<i<<","<<EnergyBufferCPU[i];
+		offset = obsevablesCount*i;
+		for(int j=0;j<obsevablesCount;j++)
+		{
+			oObsFile<<","<<ObservablesBufferCPU[j+offset];
+		}
+		oObsFile<<"\n";
+	}
+
+
+	oFile.close();
+}
 
 /*
 void phiFourLattice::writeLatticeToASCII(string fname)

@@ -4,6 +4,8 @@
 #include <curand.h>
 #include <curand_kernel.h>
 
+#include <thrust/device_vector.h>
+#include <thrust/reduce.h>
 
 __global__ void testrun()
 {
@@ -65,7 +67,8 @@ __device__ int  getNeighbour(int probeDim,int dir, int tId,int tStepCount_,int x
 	return -1;
 }
 
-__global__ void checkBoardPhiFourUpdate(float* latticeArray,int mode,float tempAssignNumber, int tStepCount_, const int NTot,float * RNG_bank)
+__global__ void checkBoardPhiFourUpdate(float* neiblatticeArray,float* currentlatticeArray,float* destlatticeArray,float *deltaEworkspace,\\
+					float m2,float lambda,int mode,float tempAssignNumber, int tStepCount_, const int NTot,float * RNG_bank)
 {
 	
 	auto xyzblockSize   = blockDim.x*blockDim.y*blockDim.z;
@@ -82,35 +85,42 @@ __global__ void checkBoardPhiFourUpdate(float* latticeArray,int mode,float tempA
 	{
 		
 		auto posIdx= tId*xyzblockSize + xyzPos ;
-		auto phix=latticeArray[posIdx];
+		auto phix=currentlatticeArray[posIdx];
 		
 		float dPhi= RNG_bank[posIdx]-0.5;
 		auto neibPlus =( (tId+1 + tStepCount_)%tStepCount_)*xyzblockSize + xyzPos  ;
 		auto neibMinus=( (tId-1 + tStepCount_)%tStepCount_)*xyzblockSize + xyzPos  ;
 		
-		float deltaE=2*(2*phix + dPhi )*dPhi- dPhi*(latticeArray[neibPlus] + latticeArray[neibMinus]);
+		float deltaE=2*(2*phix + dPhi )*dPhi- dPhi*(neiblatticeArray[neibPlus] + neiblatticeArray[neibMinus]);
 		
 		neibPlus  = getNeighbour(1,  1 , tId,tStepCount_,xyzblockSize);
 		neibMinus = getNeighbour(1, -1 , tId,tStepCount_,xyzblockSize);
-		deltaE   += 2*(2*phix + dPhi )*dPhi- dPhi*(latticeArray[neibPlus] + latticeArray[neibMinus]);
+		deltaE   += 2*(2*phix + dPhi )*dPhi- dPhi*(neiblatticeArray[neibPlus] + neiblatticeArray[neibMinus]);
 		
 		neibPlus  = getNeighbour(2,  1 , tId,tStepCount_,xyzblockSize);
 		neibMinus = getNeighbour(2, -1 , tId,tStepCount_,xyzblockSize);
-		deltaE   += 2*(2*phix + dPhi )*dPhi- dPhi*(latticeArray[neibPlus] + latticeArray[neibMinus]);
+		deltaE   += 2*(2*phix + dPhi )*dPhi- dPhi*(neiblatticeArray[neibPlus] + neiblatticeArray[neibMinus]);
 		
 		neibPlus  = getNeighbour(3,  1 , tId,tStepCount_,xyzblockSize);
 		neibMinus = getNeighbour(3, -1 , tId,tStepCount_,xyzblockSize);
-		deltaE   += 2*(2*phix + dPhi )*dPhi- dPhi*(latticeArray[neibPlus] + latticeArray[neibMinus]);
+		deltaE   += 2*(2*phix + dPhi )*dPhi- dPhi*(neiblatticeArray[neibPlus] + neiblatticeArray[neibMinus]);
 		
-		deltaE   += ( (phix+dPhi)*(phix+dPhi) -phix*phix ) + ((phix+dPhi)*(phix+dPhi)*(phix+dPhi)*(phix+dPhi) -phix*phix*phix*phix );
+		deltaE   += ( (phix+dPhi)*(phix+dPhi) -phix*phix )*m2 + lambda*((phix+dPhi)*(phix+dPhi)*(phix+dPhi)*(phix+dPhi) -phix*phix*phix*phix );
 
 		if(deltaE<0 || ( deltaE>0 && (exp(-deltaE) < RNG_bank[posIdx+1])) )
 		{
-			latticeArray[posIdx]=phix+dPhi;
+			destlatticeArray[posIdx]  = phix+dPhi;
+			deltaEworkspace[posIdx]   = deltaE;
+		}
+		else
+		{
+			destlatticeArray[posIdx]  = phix;
+			deltaEworkspace[posIdx]   = 0.0;
+		
 		}
 
-		printf(" posIdx : %d , dPhi : %f, dE : %f , phiFinal : %f \n",\\
-				posIdx,dPhi,deltaE,latticeArray[posIdx] );
+	//	printf(" posIdx : %d , dPhi : %f, dE : %f , phiFinal : %f \n",\\
+				posIdx,dPhi,deltaE,destlatticeArray[posIdx] );
 	 	tId+=2; 	
 	}
 }
@@ -198,13 +208,16 @@ __global__ void make_rand(curandState* RNG_State ,float*randArray,int tStepCount
 void phiFourLattice::phiFourLatticeGPUConstructor()
 {
 	auto err = cudaMalloc(&ObservablesBufferGPU,bufferSize*obsevablesCount*sizeof(float));
-	//auto err=cudaGetLastError();
 	cudaDeviceSynchronize();
 	if(err)
 		cout<<cudaGetErrorName(err)<<" : "<<cudaGetErrorString(err)<<"\n";
 	
 	err=cudaMalloc(&StatesBufferGPU,bufferSize*latticeSize_*sizeof(float));
 	if(err) 	cout<<cudaGetErrorName(err)<<" : "<<cudaGetErrorString(err)<<"\n";
+	
+	err=cudaMalloc(&gpuDeltaEworkspace,latticeSize_*sizeof(float));
+	if(err) 	cout<<cudaGetErrorName(err)<<" : "<<cudaGetErrorString(err)<<"\n";
+
 
 	CurrentStateGPU = StatesBufferGPU;
 	CurrentObservablesGPU = ObservablesBufferGPU;
@@ -213,27 +226,31 @@ void phiFourLattice::phiFourLatticeGPUConstructor()
 	dim3 gridSize(gridLen_,gridLen_,gridLen_);
 
 	auto RNG_bankSize = maxStepCountForSingleRandomNumberFill*latticeSize_*2;
-	auto RNG_bufferStrides=maxStepCountForSingleRandomNumberFill;
 	err=cudaMalloc(&RNG_State,latticeSize_*sizeof(curandState));
 	if(err)		cout<<cudaGetErrorName(err)<<" : "<<cudaGetErrorString(err)<<"\n";
 
 	err=cudaMalloc(&gpuUniforRealRandomBank,RNG_bankSize*sizeof(float));
 	if(err)		cout<<cudaGetErrorName(err)<<"@ cuMalloc gpuUniforRealRandomBank : "<<cudaGetErrorString(err)<<"\n";
 	
-	//cout<<"\n blockCounts , blockSize for init_RNG = "<<gridSize.x<<","<<gridSize.y<<","<<gridSize.z<<"  , "<<blockSize.x<<","<<blockSize.y<<","<<blockSize.z<<"\n";
+	cout<<" Initializing random states with "<<latticeSize_<<" seeds ";
 	init_RNG<<<gridSize , blockSize >>>(RNG_State,tStepCount_,latticeSize_);
 	err=cudaGetLastError();
 	if(err) cout<<cudaGetErrorName(err)<<"@ init_RNG : "<<cudaGetErrorString(err)<<"\n";
 	
-	//cout<<"\n blockCounts , blockSize for make_RNG = "<<gridSize.x<<","<<gridSize.y<<","<<gridSize.z<<"  , "<<blockSize.x<<","<<blockSize.y<<","<<blockSize.z<<"\n";
-	make_rand<<<gridSize , blockSize >>>(RNG_State,gpuUniforRealRandomBank,tStepCount_,RNG_bufferStrides,latticeSize_,RNG_bankSize);
-	err=cudaGetLastError();
-	if(err)		cout<<cudaGetErrorName(err)<<"@ make_rand : "<<cudaGetErrorString(err)<<"\n";
+	fillGPURandomNumberBank();
 	
+	auto memsize=bufferSize*latticeSize_*sizeof(float);
 	cout<<" Allocated "<<bufferSize*latticeSize_*sizeof(float)/1024.0/1024.0<<" MB of DEVICE Memory for lattice ( buffer size :  "<<bufferSize<<" ) \n";
-	cout<<" Allocated "<<bufferSize*obsevablesCount*sizeof(float)/1024.0/1024.0<<" MB of DEVICE Memory for obsevables ( buffer size :  "<<bufferSize<<" @ "<<obsevablesCount<<" ) \n";
+	memsize+=bufferSize*obsevablesCount*sizeof(float);
+	cout<<" Allocated "<<bufferSize*obsevablesCount*sizeof(float)/1024.0/1024.0<<" MB of DEVICE Memory for  obsevables ( buffer size :  "<<bufferSize<<" @ "<<obsevablesCount<<" ) \n";
+	memsize+=latticeSize_*sizeof(float);
+	cout<<" Allocated "<<latticeSize_*sizeof(float)/1024.0/1024.0<<" MB of DEVICE Memory for  gpuDeltaEworkspace \n";
+	memsize+=latticeSize_*sizeof(curandState);
 	cout<<" Allocated "<<latticeSize_*sizeof(curandState)/1024.0/1024.0<<" MB of DEVICE Memory for  RNG_State \n";
+	memsize+=RNG_bankSize*sizeof(float);
 	cout<<" Allocated "<<RNG_bankSize*sizeof(float)/1024.0/1024.0<<" MB of DEVICE Memory for  gpuUniforRealRandomBank \n";
+
+	cout<<" Total Allocated Device Memory = "<<memsize/1024.0/1024.0  <<" MB \n";
 }
 
 void phiFourLattice::fillGPURandomNumberBank()
@@ -241,8 +258,8 @@ void phiFourLattice::fillGPURandomNumberBank()
 	auto RNG_bankSize = maxStepCountForSingleRandomNumberFill*latticeSize_;
 	dim3 blockSize(blockLen_,blockLen_,blockLen_);
 	dim3 gridSize(gridLen_,gridLen_,gridLen_);
-	//cout<<"\n blockCounts , blockSize for make_RNG = "<<gridSize.x<<","<<gridSize.y<<","<<gridSize.z<<"  , "<<blockSize.x<<","<<blockSize.y<<","<<blockSize.z<<"\n";
-	auto RNG_bufferStrides = maxStepCountForSingleRandomNumberFill;
+	cout<<"Filling gpuUniforRealRandomBank with "<<RNG_bankSize<<"new random numbers\n";
+	auto RNG_bufferStrides=maxStepCountForSingleRandomNumberFill;
 	make_rand<<<gridSize , blockSize >>>(RNG_State,gpuUniforRealRandomBank,tStepCount_,RNG_bufferStrides,latticeSize_,RNG_bankSize);
 	auto err=cudaGetLastError();
 	if(err)		cout<<cudaGetErrorName(err)<<"@ make_rand : "<<cudaGetErrorString(err)<<"\n";
@@ -252,9 +269,11 @@ void phiFourLattice::fillGPURandomNumberBank()
 
 void phiFourLattice::phiFourLatticeGPUDistructor()
 {
-	cudaFree(CurrentStateGPU);
-	cudaFree(CurrentObservablesGPU);
 	cudaFree(gpuUniforRealRandomBank);
+	cudaFree(RNG_State);
+	cudaFree(StatesBufferGPU);
+	cudaFree(ObservablesBufferGPU);
+	cudaFree(gpuDeltaEworkspace);
 }
 
 void phiFourLattice::simplePrintfFromKernel()
@@ -288,6 +307,14 @@ void phiFourLattice::copyStateInGPUtoCPU()
 	cout<<"\n\n latticeSize_*sizeof(float) = "<<latticeSize_<<" * "<<sizeof(float)<<"\n\n";
 	cudaMemcpy(CurrentStateCPU,CurrentStateGPU,latticeSize_*sizeof(float),cudaMemcpyDeviceToHost); 	
 }
+
+void phiFourLattice::copyBufferToCPU(int begi,int end)
+{
+	cudaMemcpy(StatesBufferCPU,&StatesBufferGPU[begi],(end-begi)*latticeSize_*sizeof(float),cudaMemcpyDeviceToHost); 	
+	cudaMemcpy(ObservablesBufferCPU,&ObservablesBufferGPU[begi],(end-begi)*obsevablesCount*sizeof(float),cudaMemcpyDeviceToHost); 	
+
+}
+
 void phiFourLattice::copyObservalblesInGPUToaCPU()
 {
 	cudaMemcpy(CurrentObservablesCPU,CurrentObservablesGPU,5,cudaMemcpyHostToDevice); 	
@@ -305,6 +332,86 @@ void phiFourLattice::printLatticeOnGPU()
 	cudaDeviceSynchronize();
 }
 
+void phiFourLattice::doGPUlatticeUpdates( int numUpdates,bool copyToCPU)
+{
+	dim3 blockSize(blockLen_,blockLen_,blockLen_);
+	dim3 gridSize(gridLen_,gridLen_,gridLen_);
+ 
+	std::cout<<"Launching the kerrnels for Lattice Size = "<<latticeSize_<<" ( t_d = "<<tStepCount_<<" x_d = "<<xStepCount_<<" & D = "<<dim_<<"\n"
+		 <<" with grid size : "<<gridSize.x<<" , "<<gridSize.y<<" , "<<gridSize.z<<"\n"
+		 <<" and block size : "<<blockSize.x<<" , "<<blockSize.y<<" , "<<blockSize.z<<"\n";	
+	
+	//thrust::device_ptr<float> cptr = thrust::device_pointer_cast(gpuDeltaEworkspace);
+
+	thrust::device_ptr<float> thrust_ptr_ToDeltaEWplaceB = thrust::device_pointer_cast(gpuDeltaEworkspace);
+	float currEnergy = thrust::reduce(thrust_ptr_ToDeltaEWplaceB,thrust_ptr_ToDeltaEWplaceB + latticeSize_  );
+	
+	EnergyBufferCPU[currentBufferPosCPU]= currEnergy/latticeSize_;
+	
+	for(int i=0;i<numUpdates;i++)
+	{
+	
+		CurrentStateGPU 	= StatesBufferGPU + latticeSize_*currentBufferPosGPU;
+		CurrentObservablesGPU	= ObservablesBufferGPU + obsevablesCount*currentBufferPosGPU;
+		currentBufferPosGPU++;
+		currentBufferPosCPU++;
+		if(currentBufferPosCPU == bufferSize) 	
+		{
+			currentBufferPosCPU=0;
+		}
+
+		if(currentBufferPosGPU == bufferSize) 	
+		{
+			
+			if( copyToCPU )
+			{
+				cudaDeviceSynchronize();
+				copyBufferToCPU(0,currentBufferPosGPU);
+				writeBufferToFileGPULayout("blattice",0,currentBufferPosGPU);
+			}
+			currentBufferPosGPU=0;
+		}
+		
+		auto neibLattice   = CurrentStateGPU;
+		auto phixLattice   = CurrentStateGPU;
+		auto destnLattice  = StatesBufferGPU + currentBufferPosGPU*latticeSize_;
+		checkBoardPhiFourUpdate<<<gridSize,blockSize>>>( neibLattice , phixLattice , destnLattice, gpuDeltaEworkspace , \\
+					 	m_, lambda_, 0 , 1.0,tStepCount_ ,latticeSize_, &gpuUniforRealRandomBank[2*currentStep*latticeSize_]);
+		neibLattice   = destnLattice;
+		phixLattice   = CurrentStateGPU;
+		destnLattice  = destnLattice;
+
+		checkBoardPhiFourUpdate<<<gridSize,blockSize>>>(  neibLattice , phixLattice , destnLattice, gpuDeltaEworkspace , \\
+						m_, lambda_, 1 , 1.0,tStepCount_ ,latticeSize_, &gpuUniforRealRandomBank[2*currentStep*latticeSize_]);
+		currEnergy += thrust::reduce(thrust_ptr_ToDeltaEWplaceB,thrust_ptr_ToDeltaEWplaceB + latticeSize_  );
+		cudaDeviceSynchronize();
+		EnergyBufferCPU[currentBufferPosCPU] = currEnergy/latticeSize_;
+		if(i%256==0)
+		{	
+			std::cout<<"Doing "<<i<<" th iter \n";
+			cout<<"E = "<<currEnergy<< " , currentBufferPosCPU = "<<currentBufferPosCPU<<"  EnergyBufferCPU[currentBufferPosCPU]  : "<<EnergyBufferCPU[currentBufferPosCPU]<<"\n";
+		}
+
+		currentStep++;
+		if(currentStep==maxStepCountForSingleRandomNumberFill)
+		{
+			fillGPURandomNumberBank();
+			currentStep=0;
+		}
+
+	}
+
+	if( copyToCPU )
+	{
+		cudaDeviceSynchronize();
+		copyBufferToCPU(0,currentBufferPosGPU);
+		writeBufferToFileGPULayout("blattice",0,currentBufferPosGPU);
+	}
+
+	cout<<"\n\n_______________________________\n\n";
+}
+
+/*
 void phiFourLattice::doGPUlatticeUpdates( int numUpdates)
 {
 	dim3 blockSize(blockLen_,blockLen_,blockLen_);
@@ -322,5 +429,5 @@ void phiFourLattice::doGPUlatticeUpdates( int numUpdates)
 	//checkBoardUpdate<<<gridSize,blockSize>>>( CurrentStateGPU , 1 , 2.0,tStepCount_ ,latticeSize_ );
 	//cudaDeviceSynchronize();
 }
-
+*/
 

@@ -24,12 +24,14 @@ int main(int argc,char *argv[])
 		eventsRequired=atof(argv[4]);
 
 
-//	lattice(double mT=1,double wT=1,int nT=120,double dx=1.0,int randseed=0,int skipSweepCount=-1,int writeEventCount=128);
-//	phiFourLattice(uint8_t dim=4,uint16_t tStepCount_=8,uint16_t xStepCount=8,
-//				float mass=1,float lambda=1,uint8_t initialization=0,int randseed=0, int blockLen) ;
-	phiFourLattice alat(4,16,16,1.0,1.0,0,0, 8 );
-	//phiFourLattice alat(4,4,4,1.0,1.0,0,0, 2 );
+	//  phiFourLattice(uint8_t dim=4,uint16_t tStepCount_=8,uint16_t xStepCount=8, \\
+			float mass=1,float lambda=1,string label="blattice", uint8_t initialization=0,int randseed=0,int blockLen_=8) ;
+	phiFourLattice alat(4,16,16,1.0,1.0,"lattice816s8",0,0, 8 );
+	//  phiFourLattice alat(4, 8, 8,-4.0,6.08 ,"lattice8bs4" ,0 , 0 , 4 );
+	//  phiFourLattice alat(4,4,4,1.0,1.0,""lattice4bs2,0,0, 2 );
 	
+	int numSteps = 2000;
+
 	printf("HAHA IN MAIN\n");
 	alat.simplePrintfFromKernel();
 	
@@ -49,7 +51,7 @@ int main(int argc,char *argv[])
 	//printf("\n Printing the lattice after the reinitialization and copy !! \n ");
 	//alat.printLatticeOnCPU();
 	
-	alat.doGPUlatticeUpdates(2);
+	alat.doGPUlatticeUpdates(numSteps,true);
 	alat.copyStateInGPUtoCPU();
 	//alat.printLatticeOnGPU();
 	printf("\n Printing the lattice after the GPU update + GPUtoCPU copy !! \n ");
