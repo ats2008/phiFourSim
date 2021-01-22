@@ -1,13 +1,15 @@
 #include "lattice.h"
 
 
-phiFourLattice::phiFourLattice(uint8_t dim,uint16_t tStepCount,uint16_t xStepCount,
-				float mass,float lambda,string label ,uint8_t initialization,int randseed,int blockLen) :
+phiFourLattice::phiFourLattice(uint8_t dim,uint16_t tStepCount,uint16_t xStepCount,float a,
+				float mass,float m2,float lambda,string label ,uint8_t initialization,int randseed,int blockLen) :
 						latticeLabel(label),
 						dim_(dim),
 						tStepCount_(tStepCount),
 						xStepCount_(xStepCount),
+						a_(a),
 						m_(mass),
+						m2_(m2),
 						lambda_(lambda),
 						latticeSize_( dim_> 1 ? tStepCount_*pow(xStepCount_,dim_-1): 0),
 						initialization_(initialization),
@@ -20,7 +22,11 @@ phiFourLattice::phiFourLattice(uint8_t dim,uint16_t tStepCount,uint16_t xStepCou
 						currentBufferPosGPU(0),
 						currentBufferPosCPU(0),
 						writeFileMax(256),
-						writeFileCount(0)
+						writeFileCount(0),
+						mTilda_(m_*a),
+						m2Tilda_(m2_*a*a),
+						lTilda_(lambda*a*a*a*a)
+
 {
 	std::cout<<"\n dim = "<<dim_<<" ("<< dim <<")"<<" , mass = "<<mass
 				<<" , LATTICE SIZE = "<<latticeSize_
@@ -60,8 +66,9 @@ phiFourLattice::~phiFourLattice()
 
 void phiFourLattice::initializeLatticeCPU(int type,int randseed)
 {
-	if(initialization_ == 0)
+	if(type == 0)
 	{
+		std::cout<<"Doing the T=0 initialization \n";
 		for(int i=0;i<latticeSize_;i++)
 		{
 			CurrentStateCPU[i]=0.0;
@@ -70,7 +77,7 @@ void phiFourLattice::initializeLatticeCPU(int type,int randseed)
 	}
 	if(type ==1)
 	{
-		//std::cout<<"\n Doing the hot initialization \n";
+		std::cout<<"\n Doing the hot initialization \n";
 		randomSeed_=randseed;
 		generator.seed(randomSeed_);
 
@@ -78,7 +85,7 @@ void phiFourLattice::initializeLatticeCPU(int type,int randseed)
 		{
 			CurrentStateCPU[i]=dblDistribution(generator);
 		//	std::cout<<"  i = "<<i<<"  : "<<CurrentStateCPU[i]<<"\n";
-			}
+		}
 	}
 }
 
@@ -86,12 +93,26 @@ void phiFourLattice::initializeLatticeCPU()
 {
 	if(initialization_ == 0)
 	{
+		std::cout<<"Doing the T=0 initialization \n";
 		for(int i=0;i<latticeSize_;i++)
 		{
 			CurrentStateCPU[i]=0.0;
 		}
 	
 	}
+
+	if(initialization_ ==1)
+	{
+		std::cout<<"\n Doing the hot initialization \n";
+		generator.seed(randomSeed_);
+
+		for(int i=0;i<latticeSize_;i++)
+		{
+			CurrentStateCPU[i]=dblDistribution(generator);
+		//	std::cout<<"  i = "<<i<<"  : "<<CurrentStateCPU[i]<<"\n";
+		}
+	}
+
 }
 
 void phiFourLattice::printLatticeOnCPU()
@@ -160,7 +181,7 @@ void phiFourLattice::writeGPUlatticeLayoutToASCII(string fname)
 }
 
 
-void phiFourLattice::writeBufferToFileGPULayout(string fname,int beg,int end)
+void phiFourLattice::writeBufferToFileGPULayout(string fname,int beg,int end,bool writeLattice)
 {
 	const int blockLenX(blockLen_),blockLenY(blockLen_),blockLenZ( blockLen_) ;
 	const int gridLenX(gridLen_)  ,gridLenY(gridLen_),  gridLenZ(gridLen_);
@@ -168,14 +189,16 @@ void phiFourLattice::writeBufferToFileGPULayout(string fname,int beg,int end)
 			
 	writeFileCount++;
 	fname=latticeLabel;
+	
 	fstream	oFile((fname+"_"+to_string(writeFileCount)+".txt").c_str(),ios::out);
 	fstream oObsFile(("obs_"+fname+"_"+to_string(writeFileCount)+".txt").c_str(),ios::out);
+	if(writeLattice)
+		oFile<<tStepCount_<<","<<xStepCount_<<","<<xStepCount_<<","<<xStepCount_<<"\n";
 	
-	oFile<<tStepCount_<<","<<xStepCount_<<","<<xStepCount_<<","<<xStepCount_<<"\n";
 	oObsFile<<tStepCount_<<","<<xStepCount_<<","<<xStepCount_<<","<<xStepCount_<<"\n";
 	oObsFile<<obsevablesCount<<"\n";
 	
-	cout<<"Writing out buffer from "<<beg<<"  to  "<<end<<"\n";
+	cout<<"Writing out buffer from "<<beg<<"  to  "<<end<<" to "<<fname+"_"+to_string(writeFileCount)+".txt"<<"\n";
 	int wcount=0;
 	for(int i=0;i<(end-beg);i++)
 	{
@@ -183,13 +206,13 @@ void phiFourLattice::writeBufferToFileGPULayout(string fname,int beg,int end)
 		{
 			writeFileCount++;
 			wcount=0;
-			
+	
 			oFile.close();
 			oFile.open((fname+"_"+to_string(writeFileCount)+".txt").c_str(),ios::out);
+			oFile<<tStepCount_<<","<<xStepCount_<<","<<xStepCount_<<","<<xStepCount_<<"\n";
+			
 			oObsFile.close();
 			oObsFile.open(("obs_"+fname+"_"+to_string(writeFileCount)+".txt").c_str(),ios::out);
-			
-			oFile<<tStepCount_<<","<<xStepCount_<<","<<xStepCount_<<","<<xStepCount_<<"\n";
 			oObsFile<<tStepCount_<<","<<xStepCount_<<","<<xStepCount_<<","<<xStepCount_<<"\n";
 			oObsFile<<obsevablesCount<<"\n";
 			}
@@ -200,7 +223,7 @@ void phiFourLattice::writeBufferToFileGPULayout(string fname,int beg,int end)
 		for(auto bidY=0;bidY<gridLenY;bidY++)
 		for(auto bidZ=0;bidZ<gridLenZ;bidZ++)
 		{
-
+			if(writeLattice)
 			for(auto thIdx=0;thIdx<blockLenX;thIdx++)
 			for(auto thIdy=0;thIdy<blockLenY;thIdy++)
 			for(auto thIdz=0;thIdz<blockLenZ;thIdz++)
@@ -230,8 +253,8 @@ void phiFourLattice::writeBufferToFileGPULayout(string fname,int beg,int end)
 		oObsFile<<"\n";
 	}
 
-
 	oFile.close();
+	oObsFile.close();
 }
 
 /*

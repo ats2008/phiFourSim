@@ -29,8 +29,8 @@ __device__ int  getNeighbour(int probeDim,int dir, int tId,int tStepCount_,int x
 {
 	if(probeDim == 1 ) 
 	{
-		auto neibBlkIdx = (blockIdx.x + dir < 0 or blockIdx.x + dir > gridDim.x -1 )? (blockIdx.x + dir + gridDim.x )%gridDim.x : blockIdx.x;
-		auto neibThrIdx = (threadIdx.x + dir + blockDim.x )%blockDim.x;
+		auto neibBlkIdx = ( threadIdx.x + dir < 0 or threadIdx.x + dir > blockDim.x -1 )? (blockIdx.x + dir + gridDim.x )%gridDim.x : blockIdx.x;
+		auto neibThrIdx = ( threadIdx.x + dir + blockDim.x )%blockDim.x;
 		
 		auto xyzblockNumber = neibBlkIdx*gridDim.y*gridDim.z + blockIdx.y*gridDim.z + blockIdx.z;
 		auto xyzPos         = ( xyzblockSize * xyzblockNumber * tStepCount_ ) 
@@ -41,8 +41,8 @@ __device__ int  getNeighbour(int probeDim,int dir, int tId,int tStepCount_,int x
 	}
 	if(probeDim == 2 ) 
 	{
-		auto neibBlkIdx = (blockIdx.y +dir < 0 or blockIdx.y + dir > gridDim.y -1 )? (blockIdx.y + dir + gridDim.y )%gridDim.y : blockIdx.y;
-		auto neibThrIdx = (threadIdx.y+ dir + blockDim.y )%blockDim.y;
+		auto neibBlkIdx = ( threadIdx.y +dir < 0 or threadIdx.y + dir > blockDim.y -1 )? (blockIdx.y + dir + gridDim.y )%gridDim.y : blockIdx.y;
+		auto neibThrIdx = ( threadIdx.y+ dir + blockDim.y )%blockDim.y;
 		
 		auto xyzblockNumber = blockIdx.x*gridDim.y*gridDim.z + neibBlkIdx*gridDim.z + blockIdx.z;
 		auto xyzPos         = ( xyzblockSize * xyzblockNumber * tStepCount_ ) 
@@ -53,7 +53,7 @@ __device__ int  getNeighbour(int probeDim,int dir, int tId,int tStepCount_,int x
 	}
 	if(probeDim == 3 ) 
 	{
-		auto neibBlkIdx = (blockIdx.z +dir < 0 or blockIdx.z + dir > gridDim.z -1 )? (blockIdx.z + dir + gridDim.z )%gridDim.z : blockIdx.z;
+		auto neibBlkIdx = (threadIdx.z +dir < 0 or threadIdx.z + dir > blockDim.z -1 )? (blockIdx.z + dir + gridDim.z )%gridDim.z : blockIdx.z;
 		auto neibThrIdx = (threadIdx.z + dir + blockDim.z )%blockDim.z;
 		
 		auto xyzblockNumber = blockIdx.x*gridDim.y*gridDim.z + blockIdx.y*gridDim.z + neibBlkIdx;
@@ -68,7 +68,7 @@ __device__ int  getNeighbour(int probeDim,int dir, int tId,int tStepCount_,int x
 }
 
 __global__ void checkBoardPhiFourUpdate(float* neiblatticeArray,float* currentlatticeArray,float* destlatticeArray,float *deltaEworkspace,\\
-					float m2,float lambda,int mode,float tempAssignNumber, int tStepCount_, const int NTot,float * RNG_bank)
+					float m2,float lambda,int mode,float tempAssignNumber, int tStepCount_, const int NTot,float * RNG_bank, float RWidth =2.0)
 {
 	
 	auto xyzblockSize   = blockDim.x*blockDim.y*blockDim.z;
@@ -87,7 +87,7 @@ __global__ void checkBoardPhiFourUpdate(float* neiblatticeArray,float* currentla
 		auto posIdx= tId*xyzblockSize + xyzPos ;
 		auto phix=currentlatticeArray[posIdx];
 		
-		float dPhi= RNG_bank[posIdx]-0.5;
+		float dPhi= RWidth*(RNG_bank[2*posIdx]-0.5);
 		auto neibPlus =( (tId+1 + tStepCount_)%tStepCount_)*xyzblockSize + xyzPos  ;
 		auto neibMinus=( (tId-1 + tStepCount_)%tStepCount_)*xyzblockSize + xyzPos  ;
 		
@@ -107,10 +107,11 @@ __global__ void checkBoardPhiFourUpdate(float* neiblatticeArray,float* currentla
 		
 		deltaE   += ( (phix+dPhi)*(phix+dPhi) -phix*phix )*m2 + lambda*((phix+dPhi)*(phix+dPhi)*(phix+dPhi)*(phix+dPhi) -phix*phix*phix*phix );
 
-		if(deltaE<0 || ( deltaE>0 && (exp(-deltaE) < RNG_bank[posIdx+1])) )
+		if(deltaE<0 || ( deltaE>0 && (exp(-deltaE) > RNG_bank[2*posIdx+1])) )
 		{
 			destlatticeArray[posIdx]  = phix+dPhi;
 			deltaEworkspace[posIdx]   = deltaE;
+		//	deltaEworkspace[posIdx]   = dPhi;
 		}
 		else
 		{
@@ -119,8 +120,8 @@ __global__ void checkBoardPhiFourUpdate(float* neiblatticeArray,float* currentla
 		
 		}
 
-	//	printf(" posIdx : %d , dPhi : %f, dE : %f , phiFinal : %f \n",\\
-				posIdx,dPhi,deltaE,destlatticeArray[posIdx] );
+		//printf(" posIdx : %d , dE : %f ,dPhi : %f, phiOld : %f , phiFinal : %f , exp(-dE) : %f , rnd : %f \n",\\
+				posIdx,deltaE,dPhi,currentlatticeArray[posIdx],destlatticeArray[posIdx] ,exp(-deltaE),RNG_bank[posIdx+1]);
 	 	tId+=2; 	
 	}
 }
@@ -367,6 +368,7 @@ void phiFourLattice::doGPUlatticeUpdates( int numUpdates,bool copyToCPU)
 			{
 				cudaDeviceSynchronize();
 				copyBufferToCPU(0,currentBufferPosGPU);
+				cudaDeviceSynchronize();
 				writeBufferToFileGPULayout("blattice",0,currentBufferPosGPU);
 			}
 			currentBufferPosGPU=0;
@@ -376,13 +378,13 @@ void phiFourLattice::doGPUlatticeUpdates( int numUpdates,bool copyToCPU)
 		auto phixLattice   = CurrentStateGPU;
 		auto destnLattice  = StatesBufferGPU + currentBufferPosGPU*latticeSize_;
 		checkBoardPhiFourUpdate<<<gridSize,blockSize>>>( neibLattice , phixLattice , destnLattice, gpuDeltaEworkspace , \\
-					 	m_, lambda_, 0 , 1.0,tStepCount_ ,latticeSize_, &gpuUniforRealRandomBank[2*currentStep*latticeSize_]);
+					 	m2Tilda_, lTilda_, 0 , 1.0,tStepCount_ ,latticeSize_, &gpuUniforRealRandomBank[2*currentStep*latticeSize_]);
 		neibLattice   = destnLattice;
 		phixLattice   = CurrentStateGPU;
 		destnLattice  = destnLattice;
 
 		checkBoardPhiFourUpdate<<<gridSize,blockSize>>>(  neibLattice , phixLattice , destnLattice, gpuDeltaEworkspace , \\
-						m_, lambda_, 1 , 1.0,tStepCount_ ,latticeSize_, &gpuUniforRealRandomBank[2*currentStep*latticeSize_]);
+						m2Tilda_, lTilda_, 1 , 1.0,tStepCount_ ,latticeSize_, &gpuUniforRealRandomBank[2*currentStep*latticeSize_]);
 		currEnergy += thrust::reduce(thrust_ptr_ToDeltaEWplaceB,thrust_ptr_ToDeltaEWplaceB + latticeSize_  );
 		cudaDeviceSynchronize();
 		EnergyBufferCPU[currentBufferPosCPU] = currEnergy/latticeSize_;

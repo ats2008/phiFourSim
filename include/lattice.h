@@ -33,8 +33,8 @@ class phiFourLattice : public Lattice {
 		
 		constexpr static uint8_t DIMMAX =4;
 		
-		phiFourLattice(uint8_t dim=4,uint16_t tStepCount_=8,uint16_t xStepCount=8,
-				float mass=1,float lambda=1,string label="blattice", uint8_t initialization=0,int randseed=0,int blockLen_=8) ;
+		phiFourLattice(uint8_t dim=4,uint16_t tStepCount_=8,uint16_t xStepCount=8, float a=1.0,
+				float mass=1,float m2 =-1.0,float lambda=1,string label="blattice", uint8_t initialization=0,int randseed=0,int blockLen_=8) ;
 		~phiFourLattice();
 
 		void simplePrintfFromKernel();
@@ -48,7 +48,7 @@ class phiFourLattice : public Lattice {
 		void printLatticeOnCPU();
 		void writeLatticeToASCII(string fname="LAT.txt");
 		void writeGPUlatticeLayoutToASCII(string fname="LAT.txt");
-		void writeBufferToFileGPULayout(string fname="LATbuff.txt",int beg=0,int end=1 );	
+		void writeBufferToFileGPULayout(string fname="LATbuff.txt",int beg=0,int end=1,bool writeLattice=false );	
 
 		void initializeLatticeCPU(int type,int randseed);
 		void doGPUlatticeUpdates(int numUpdates=1,bool copyToCPU=false);
@@ -59,7 +59,7 @@ class phiFourLattice : public Lattice {
 		const int dim_;
 		const uint16_t tStepCount_;
 		const uint16_t xStepCount_;
-		const float m_,lambda_;
+		const float a_,m_,m2_,lambda_,mTilda_,m2Tilda_,lTilda_;
 		const uint32_t latticeSize_;	
 		const uint8_t initialization_;
 		const int writeFileMax;

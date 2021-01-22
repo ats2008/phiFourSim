@@ -6,8 +6,8 @@ CXX 		= g++
 NVCC 		= nvcc
 
 LIBS		= -lm -lcudart
-CXXFLAGS 	= -std=c++11 $(INCPATH) -g
-NVCCFLAGS	= -std=c++11 $(INCPATH) -g -G
+CXXFLAGS 	= -std=c++14 $(INCPATH) -g
+NVCCFLAGS	= -std=c++14 $(INCPATH) -g -G
 NVCCLIBS	= -lcudart
 
 TARGET		= main.exe
