@@ -2,7 +2,7 @@
 
 
 phiFourLattice::phiFourLattice(uint8_t dim,uint16_t tStepCount,uint16_t xStepCount,float a,
-				float mass,float m2,float lambda,string label ,uint8_t initialization,int randseed,int blockLen) :
+				float mass,float m2,float lambda,string label ,uint8_t initialization,int randseed,int blockLen, int thermalizeSkip, int acfSkip) :
 						latticeLabel(label),
 						dim_(dim),
 						tStepCount_(tStepCount),
@@ -25,8 +25,9 @@ phiFourLattice::phiFourLattice(uint8_t dim,uint16_t tStepCount,uint16_t xStepCou
 						writeFileCount(0),
 						mTilda_(m_*a),
 						m2Tilda_(m2_*a*a),
-						lTilda_(lambda*a*a*a*a)
-
+						lTilda_(lambda*a*a*a*a),
+						thermalizationSkip_(thermalizeSkip),
+						autoCorrSkip_(acfSkip)
 {
 	std::cout<<"\n dim = "<<dim_<<" ("<< dim <<")"<<" , mass = "<<mass
 				<<" , LATTICE SIZE = "<<latticeSize_

@@ -349,6 +349,34 @@ void phiFourLattice::doGPUlatticeUpdates( int numUpdates,bool copyToCPU)
 	
 	EnergyBufferCPU[currentBufferPosCPU]= currEnergy/latticeSize_;
 	
+	auto neibLattice   = CurrentStateGPU;
+	auto phixLattice   = CurrentStateGPU;
+	auto destnLattice  = CurrentStateGPU;
+	for(int j=0;j<thermalizationSkip_;j++)
+		{
+			checkBoardPhiFourUpdate<<<gridSize,blockSize>>>( neibLattice , phixLattice , destnLattice, gpuDeltaEworkspace , \\
+					m2Tilda_, lTilda_, 0 , 1.0,tStepCount_ ,latticeSize_, &gpuUniforRealRandomBank[2*currentStep*latticeSize_]);
+		
+		
+			checkBoardPhiFourUpdate<<<gridSize,blockSize>>>(  neibLattice , phixLattice , destnLattice, gpuDeltaEworkspace , \\
+					m2Tilda_, lTilda_, 1 , 1.0,tStepCount_ ,latticeSize_, &gpuUniforRealRandomBank[2*currentStep*latticeSize_]);
+	
+	                currEnergy += thrust::reduce(thrust_ptr_ToDeltaEWplaceB,thrust_ptr_ToDeltaEWplaceB + latticeSize_  );
+
+			currentStep++;
+			if(currentStep==maxStepCountForSingleRandomNumberFill)
+			{
+				fillGPURandomNumberBank();
+				currentStep=0;
+			}
+		}
+
+	cudaEvent_t start, stop;
+	cudaEventCreate(&start);
+	cudaEventCreate(&stop);
+	
+	cudaEventRecord(start);
+	cudaEventSynchronize(start);
 	for(int i=0;i<numUpdates;i++)
 	{
 	
@@ -367,16 +395,38 @@ void phiFourLattice::doGPUlatticeUpdates( int numUpdates,bool copyToCPU)
 			if( copyToCPU )
 			{
 				cudaDeviceSynchronize();
-				copyBufferToCPU(0,currentBufferPosGPU);
+			//	copyBufferToCPU(0,currentBufferPosGPU);
 				cudaDeviceSynchronize();
-				writeBufferToFileGPULayout("blattice",0,currentBufferPosGPU);
+			//	writeBufferToFileGPULayout("blattice",0,currentBufferPosGPU,true);
 			}
 			currentBufferPosGPU=0;
 		}
 		
 		auto neibLattice   = CurrentStateGPU;
 		auto phixLattice   = CurrentStateGPU;
-		auto destnLattice  = StatesBufferGPU + currentBufferPosGPU*latticeSize_;
+		auto destnLattice  = CurrentStateGPU;
+		for(int j=0;j<autoCorrSkip_;j++)
+		{
+			checkBoardPhiFourUpdate<<<gridSize,blockSize>>>( neibLattice , phixLattice , destnLattice, gpuDeltaEworkspace , \\
+					m2Tilda_, lTilda_, 0 , 1.0,tStepCount_ ,latticeSize_, &gpuUniforRealRandomBank[2*currentStep*latticeSize_]);
+		
+		
+			checkBoardPhiFourUpdate<<<gridSize,blockSize>>>(  neibLattice , phixLattice , destnLattice, gpuDeltaEworkspace , \\
+					m2Tilda_, lTilda_, 1 , 1.0,tStepCount_ ,latticeSize_, &gpuUniforRealRandomBank[2*currentStep*latticeSize_]);
+			currEnergy += thrust::reduce(thrust_ptr_ToDeltaEWplaceB,thrust_ptr_ToDeltaEWplaceB + latticeSize_  );
+
+			currentStep++;
+			if(currentStep==maxStepCountForSingleRandomNumberFill)
+			{
+				fillGPURandomNumberBank();
+				currentStep=0;
+			}
+		}
+
+
+		neibLattice   = CurrentStateGPU;
+		phixLattice   = CurrentStateGPU;
+		destnLattice  = StatesBufferGPU + currentBufferPosGPU*latticeSize_;
 		checkBoardPhiFourUpdate<<<gridSize,blockSize>>>( neibLattice , phixLattice , destnLattice, gpuDeltaEworkspace , \\
 					 	m2Tilda_, lTilda_, 0 , 1.0,tStepCount_ ,latticeSize_, &gpuUniforRealRandomBank[2*currentStep*latticeSize_]);
 		neibLattice   = destnLattice;
@@ -406,10 +456,14 @@ void phiFourLattice::doGPUlatticeUpdates( int numUpdates,bool copyToCPU)
 	if( copyToCPU )
 	{
 		cudaDeviceSynchronize();
-		copyBufferToCPU(0,currentBufferPosGPU);
-		writeBufferToFileGPULayout("blattice",0,currentBufferPosGPU);
+	//	copyBufferToCPU(0,currentBufferPosGPU);
+	//	writeBufferToFileGPULayout("blattice",0,currentBufferPosGPU,true);
 	}
-
+	cudaEventRecord(stop);
+	cudaEventSynchronize(stop);
+	float milliseconds = 0;
+	cudaEventElapsedTime(&milliseconds, start, stop);
+	cout<<"\n\n  Time spent = "<<milliseconds<<"\n\n";
 	cout<<"\n\n_______________________________\n\n";
 }
 

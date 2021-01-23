@@ -34,7 +34,8 @@ class phiFourLattice : public Lattice {
 		constexpr static uint8_t DIMMAX =4;
 		
 		phiFourLattice(uint8_t dim=4,uint16_t tStepCount_=8,uint16_t xStepCount=8, float a=1.0,
-				float mass=1,float m2 =-1.0,float lambda=1,string label="blattice", uint8_t initialization=0,int randseed=0,int blockLen_=8) ;
+				float mass=1,float m2 =-1.0,float lambda=1,string label="blattice", uint8_t initialization=0,int randseed=0,int blockLen_=8,
+				int thermalizationSkp = 200 , int autoCorrelationSkip=20) ;
 		~phiFourLattice();
 
 		void simplePrintfFromKernel();
@@ -66,7 +67,9 @@ class phiFourLattice : public Lattice {
 		      int writeFileCount;
 		const int blockLen_;
 		int gridLen_;
-		
+		int autoCorrSkip_;
+		int thermalizationSkip_;
+
 		uint32_t randomSeed_;
 		RANDOM_ENGINE generator;	
 		uniform_int_distribution<int> intDistribution;	
