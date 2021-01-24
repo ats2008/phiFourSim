@@ -38,11 +38,12 @@ int main(int argc,char *argv[])
 	 int rSeed(0);
 	 int blockLen(2);
 
-	 if(choice== 1.0)      {dim=  4;tStep=  16;xStep=16;a= 1.0 ;m= 1.0 ; m2=-4.0 ;lambda= 5.034 ;label="lattice16s2" ;init=0; rSeed=  0 ;blockLen= 2 ;}
-	 if(choice== 2.0)      {dim=  4;tStep=  14;xStep=14;a= 1.0 ;m= 2.0 ; m2=-4.0 ;lambda= 5.113 ;label="lattice14b2" ;init=0; rSeed=  0 ;blockLen= 2 ;}
-         if(choice== 3.0)      {dim=  4;tStep=  10;xStep=10;a= 1.0 ;m= 2.0 ; m2=-4.0 ;lambda= 6.08  ;label="lattice10b2" ;init=0; rSeed=  0 ;blockLen= 2 ;}
-         if(choice== 4.0)      {dim=  4;tStep=   8;xStep= 8;a= 1.0 ;m= 2.0 ; m2=-4.0 ;lambda= 6.008 ;label="lattice8b2"  ;init=0; rSeed=  0 ;blockLen= 2 ;}
-	 if(choice== 5.0)      {dim=  4;tStep=   4;xStep= 4;a= 1.0 ;m= 2.0 ; m2=-4.0 ;lambda= 6.008 ;label="lattice4b2"  ;init=0; rSeed=  0 ;blockLen= 2 ;}
+	 if(choice== -1.0)      {dim=  2;tStep=  16;xStep=16;a= 1.0 ;m= 1.0 ; m2=-4.0 ;lambda= 5.034 ;label="lattice16s2" ;init=0; rSeed=  0 ;blockLen= 2 ;}
+	 if(choice==  1.0)      {dim=  4;tStep=  16;xStep=16;a= 1.0 ;m= 1.0 ; m2=-4.0 ;lambda= 5.034 ;label="lattice16s2" ;init=0; rSeed=  0 ;blockLen= 2 ;}
+	 if(choice==  2.0)      {dim=  4;tStep=  14;xStep=14;a= 1.0 ;m= 2.0 ; m2=-4.0 ;lambda= 5.113 ;label="lattice14b2" ;init=0; rSeed=  0 ;blockLen= 2 ;}
+         if(choice==  3.0)      {dim=  4;tStep=  10;xStep=10;a= 1.0 ;m= 2.0 ; m2=-4.0 ;lambda= 6.08  ;label="lattice10b2" ;init=0; rSeed=  0 ;blockLen= 2 ;}
+         if(choice==  4.0)      {dim=  4;tStep=   8;xStep= 8;a= 1.0 ;m= 2.0 ; m2=-4.0 ;lambda= 6.008 ;label="lattice8b2"  ;init=0; rSeed=  0 ;blockLen= 2 ;}
+	 if(choice==  5.0)      {dim=  4;tStep=   4;xStep= 4;a= 1.0 ;m= 2.0 ; m2=-4.0 ;lambda= 6.008 ;label="lattice4b2"  ;init=0; rSeed=  0 ;blockLen= 2 ;}
 	
 	int numSteps = (1000);
  	

@@ -25,11 +25,82 @@ __global__ void printLattice(float * lattice,uint16_t l1,uint16_t lTotal)
 	return;
 }
 
+
+__device__ int  getNeighbour2D(int probeDim,int dir, int xtblockSize)
+{
+	if(probeDim == 1 ) 
+	{
+		auto neibBlkIdx = ( int(threadIdx.x) + dir < 0 or threadIdx.x + dir > blockDim.x -1 )? (blockIdx.x + dir + gridDim.x )%gridDim.x : blockIdx.x;
+		auto neibThrIdx = ( threadIdx.x + dir + blockDim.x )%blockDim.x;
+		
+		auto xtblockNumber = neibBlkIdx*gridDim.y + blockIdx.y;
+		auto xtPos         = ( xtblockSize * xtblockNumber  ) 
+				+ neibThrIdx*blockDim.y+ threadIdx.y ;
+		auto posIdx= xtPos ;
+		
+		return posIdx;
+	}
+	if(probeDim == 2 ) 
+	{
+		auto neibBlkIdx = ( int(threadIdx.y) +dir < 0 or threadIdx.y + dir > blockDim.y -1 )? (blockIdx.y + dir + gridDim.y )%gridDim.y : blockIdx.y;
+		auto neibThrIdx = ( threadIdx.y+ dir + blockDim.y )%blockDim.y;
+		
+		auto xtblockNumber = blockIdx.x*gridDim.y*gridDim.z + neibBlkIdx;
+		auto xtPos         = xtblockSize * xtblockNumber + threadIdx.x*blockDim.y + neibThrIdx ;
+		auto posIdx = xtPos ;
+		
+		return posIdx;
+	}
+	
+	return -1;
+}
+
+__global__ void checkBoardPhiFourUpdate2D(float* neiblatticeArray,float* currentlatticeArray,float* destlatticeArray,float *deltaEworkspace,\\
+					float m2,float lambda,int mode,float tempAssignNumber, int tStepCount_, const int NTot,float * RNG_bank, float RWidth =2.0)
+{
+	
+	auto xtblockSize   = blockDim.x*blockDim.y;
+	auto xtblockNumber = blockIdx.x*gridDim.y + blockIdx.y ;
+	auto xtPos         = ( xtblockSize * xtblockNumber ) 
+				+ threadIdx.x*blockDim.y +  threadIdx.y ;
+	if(xtPos %2 == mode)
+	{
+		auto posIdx = xtPos ;
+		auto phix=currentlatticeArray[posIdx];
+		
+		float dPhi= RWidth*(RNG_bank[2*posIdx]-0.5);
+		
+		auto neibPlus  = getNeighbour2D(1,  1 , xtblockSize);
+		auto neibMinus = getNeighbour2D(1, -1 , xtblockSize);
+		float deltaE   = 2*( 2*phix + dPhi )*dPhi - dPhi*(neiblatticeArray[neibPlus] + neiblatticeArray[neibMinus]);
+		
+		neibPlus  = getNeighbour2D(1,  1 ,xtblockSize);
+		neibMinus = getNeighbour2D(1, -1 ,xtblockSize);
+		deltaE   += 2*(2*phix + dPhi )*dPhi- dPhi*(neiblatticeArray[neibPlus] + neiblatticeArray[neibMinus]);
+		
+		deltaE   += ( (phix+dPhi)*(phix+dPhi) -phix*phix )*m2 + lambda*((phix+dPhi)*(phix+dPhi)*(phix+dPhi)*(phix+dPhi) -phix*phix*phix*phix );
+
+		if(deltaE<0 || ( deltaE>0 && (exp(-deltaE) > RNG_bank[2*posIdx+1])) )
+		{
+			destlatticeArray[posIdx]  = phix+dPhi;
+			deltaEworkspace[posIdx]   = deltaE;
+		}
+		else
+		{
+			destlatticeArray[posIdx]  = phix;
+			deltaEworkspace[posIdx]   = 0.0;
+		}
+	}
+		//printf(" posIdx : %d , dE : %f ,dPhi : %f, phiOld : %f , phiFinal : %f , exp(-dE) : %f , rnd : %f \n",\\
+				posIdx,deltaE,dPhi,currentlatticeArray[posIdx],destlatticeArray[posIdx] ,exp(-deltaE),RNG_bank[posIdx+1]);
+}
+
+
 __device__ int  getNeighbour(int probeDim,int dir, int tId,int tStepCount_,int xyzblockSize)
 {
 	if(probeDim == 1 ) 
 	{
-		auto neibBlkIdx = ( threadIdx.x + dir < 0 or threadIdx.x + dir > blockDim.x -1 )? (blockIdx.x + dir + gridDim.x )%gridDim.x : blockIdx.x;
+		auto neibBlkIdx = ( int(threadIdx.x) + dir < 0 or threadIdx.x + dir > blockDim.x -1 )? (blockIdx.x + dir + gridDim.x )%gridDim.x : blockIdx.x;
 		auto neibThrIdx = ( threadIdx.x + dir + blockDim.x )%blockDim.x;
 		
 		auto xyzblockNumber = neibBlkIdx*gridDim.y*gridDim.z + blockIdx.y*gridDim.z + blockIdx.z;
@@ -41,7 +112,7 @@ __device__ int  getNeighbour(int probeDim,int dir, int tId,int tStepCount_,int x
 	}
 	if(probeDim == 2 ) 
 	{
-		auto neibBlkIdx = ( threadIdx.y +dir < 0 or threadIdx.y + dir > blockDim.y -1 )? (blockIdx.y + dir + gridDim.y )%gridDim.y : blockIdx.y;
+		auto neibBlkIdx = ( int(threadIdx.y) +dir < 0 or threadIdx.y + dir > blockDim.y -1 )? (blockIdx.y + dir + gridDim.y )%gridDim.y : blockIdx.y;
 		auto neibThrIdx = ( threadIdx.y+ dir + blockDim.y )%blockDim.y;
 		
 		auto xyzblockNumber = blockIdx.x*gridDim.y*gridDim.z + neibBlkIdx*gridDim.z + blockIdx.z;
@@ -53,7 +124,7 @@ __device__ int  getNeighbour(int probeDim,int dir, int tId,int tStepCount_,int x
 	}
 	if(probeDim == 3 ) 
 	{
-		auto neibBlkIdx = (threadIdx.z +dir < 0 or threadIdx.z + dir > blockDim.z -1 )? (blockIdx.z + dir + gridDim.z )%gridDim.z : blockIdx.z;
+		auto neibBlkIdx = ( int(threadIdx.z) +dir < 0 or threadIdx.z + dir > blockDim.z -1 )? (blockIdx.z + dir + gridDim.z )%gridDim.z : blockIdx.z;
 		auto neibThrIdx = (threadIdx.z + dir + blockDim.z )%blockDim.z;
 		
 		auto xyzblockNumber = blockIdx.x*gridDim.y*gridDim.z + blockIdx.y*gridDim.z + neibBlkIdx;
@@ -66,6 +137,8 @@ __device__ int  getNeighbour(int probeDim,int dir, int tId,int tStepCount_,int x
 	
 	return -1;
 }
+
+
 
 __global__ void checkBoardPhiFourUpdate(float* neiblatticeArray,float* currentlatticeArray,float* destlatticeArray,float *deltaEworkspace,\\
 					float m2,float lambda,int mode,float tempAssignNumber, int tStepCount_, const int NTot,float * RNG_bank, float RWidth =2.0)
@@ -97,13 +170,13 @@ __global__ void checkBoardPhiFourUpdate(float* neiblatticeArray,float* currentla
 		neibMinus = getNeighbour(1, -1 , tId,tStepCount_,xyzblockSize);
 		deltaE   += 2*(2*phix + dPhi )*dPhi- dPhi*(neiblatticeArray[neibPlus] + neiblatticeArray[neibMinus]);
 		
-		neibPlus  = getNeighbour(2,  1 , tId,tStepCount_,xyzblockSize);
-		neibMinus = getNeighbour(2, -1 , tId,tStepCount_,xyzblockSize);
-		deltaE   += 2*(2*phix + dPhi )*dPhi- dPhi*(neiblatticeArray[neibPlus] + neiblatticeArray[neibMinus]);
-		
-		neibPlus  = getNeighbour(3,  1 , tId,tStepCount_,xyzblockSize);
-		neibMinus = getNeighbour(3, -1 , tId,tStepCount_,xyzblockSize);
-		deltaE   += 2*(2*phix + dPhi )*dPhi- dPhi*(neiblatticeArray[neibPlus] + neiblatticeArray[neibMinus]);
+		//neibPlus  = getNeighbour(2,  1 , tId,tStepCount_,xyzblockSize);
+		//neibMinus = getNeighbour(2, -1 , tId,tStepCount_,xyzblockSize);
+		//deltaE   += 2*(2*phix + dPhi )*dPhi- dPhi*(neiblatticeArray[neibPlus] + neiblatticeArray[neibMinus]);
+		//
+		//neibPlus  = getNeighbour(3,  1 , tId,tStepCount_,xyzblockSize);
+		//neibMinus = getNeighbour(3, -1 , tId,tStepCount_,xyzblockSize);
+		//deltaE   += 2*(2*phix + dPhi )*dPhi- dPhi*(neiblatticeArray[neibPlus] + neiblatticeArray[neibMinus]);
 		
 		deltaE   += ( (phix+dPhi)*(phix+dPhi) -phix*phix )*m2 + lambda*((phix+dPhi)*(phix+dPhi)*(phix+dPhi)*(phix+dPhi) -phix*phix*phix*phix );
 
@@ -337,7 +410,13 @@ void phiFourLattice::doGPUlatticeUpdates( int numUpdates,bool copyToCPU)
 {
 	dim3 blockSize(blockLen_,blockLen_,blockLen_);
 	dim3 gridSize(gridLen_,gridLen_,gridLen_);
- 
+ 	
+	if(dim_==2)
+	{
+		blockSize.z  = 1;
+		 gridSize.z  = 1;
+	}
+
 	std::cout<<"Launching the kerrnels for Lattice Size = "<<latticeSize_<<" ( t_d = "<<tStepCount_<<" x_d = "<<xStepCount_<<" & D = "<<dim_<<"\n"
 		 <<" with grid size : "<<gridSize.x<<" , "<<gridSize.y<<" , "<<gridSize.z<<"\n"
 		 <<" and block size : "<<blockSize.x<<" , "<<blockSize.y<<" , "<<blockSize.z<<"\n";	
@@ -371,12 +450,12 @@ void phiFourLattice::doGPUlatticeUpdates( int numUpdates,bool copyToCPU)
 			}
 		}
 
-	cudaEvent_t start, stop;
-	cudaEventCreate(&start);
-	cudaEventCreate(&stop);
-	
-	cudaEventRecord(start);
-	cudaEventSynchronize(start);
+	//cudaEvent_t start, stop;
+	//cudaEventCreate(&start);
+	//cudaEventCreate(&stop);
+	//
+	//cudaEventRecord(start);
+	//cudaEventSynchronize(start);
 	for(int i=0;i<numUpdates;i++)
 	{
 	
@@ -395,9 +474,9 @@ void phiFourLattice::doGPUlatticeUpdates( int numUpdates,bool copyToCPU)
 			if( copyToCPU )
 			{
 				cudaDeviceSynchronize();
-			//	copyBufferToCPU(0,currentBufferPosGPU);
+				copyBufferToCPU(0,currentBufferPosGPU);
 				cudaDeviceSynchronize();
-			//	writeBufferToFileGPULayout("blattice",0,currentBufferPosGPU,true);
+				writeBufferToFileGPULayout("blattice",0,currentBufferPosGPU,true);
 			}
 			currentBufferPosGPU=0;
 		}
@@ -456,14 +535,14 @@ void phiFourLattice::doGPUlatticeUpdates( int numUpdates,bool copyToCPU)
 	if( copyToCPU )
 	{
 		cudaDeviceSynchronize();
-	//	copyBufferToCPU(0,currentBufferPosGPU);
-	//	writeBufferToFileGPULayout("blattice",0,currentBufferPosGPU,true);
+		copyBufferToCPU(0,currentBufferPosGPU);
+		writeBufferToFileGPULayout("blattice",0,currentBufferPosGPU,true);
 	}
-	cudaEventRecord(stop);
-	cudaEventSynchronize(stop);
-	float milliseconds = 0;
-	cudaEventElapsedTime(&milliseconds, start, stop);
-	cout<<"\n\n  Time spent = "<<milliseconds<<"\n\n";
+	//cudaEventRecord(stop);
+	//cudaEventSynchronize(stop);
+	//float milliseconds = 0;
+	//cudaEventElapsedTime(&milliseconds, start, stop);
+	//cout<<"\n\n  Time spent = "<<milliseconds<<"\n\n";
 	cout<<"\n\n_______________________________\n\n";
 }
 

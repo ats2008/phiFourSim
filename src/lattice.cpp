@@ -190,9 +190,9 @@ void phiFourLattice::writeBufferToFileGPULayout(string fname,int beg,int end,boo
 			
 	writeFileCount++;
 	fname=latticeLabel;
-	
-	fstream	oFile((fname+"_"+to_string(writeFileCount)+".txt").c_str(),ios::out);
-	fstream oObsFile(("obs_"+fname+"_"+to_string(writeFileCount)+".txt").c_str(),ios::out);
+	string prifix("data/");
+	fstream	oFile((prifix+fname+"_"+to_string(writeFileCount)+".txt").c_str(),ios::out);
+	fstream oObsFile((prifix+"obs_"+fname+"_"+to_string(writeFileCount)+".txt").c_str(),ios::out);
 	if(writeLattice)
 		oFile<<tStepCount_<<","<<xStepCount_<<","<<xStepCount_<<","<<xStepCount_<<"\n";
 	
@@ -209,11 +209,11 @@ void phiFourLattice::writeBufferToFileGPULayout(string fname,int beg,int end,boo
 			wcount=0;
 	
 			oFile.close();
-			oFile.open((fname+"_"+to_string(writeFileCount)+".txt").c_str(),ios::out);
+			oFile.open(prifix+(fname+"_"+to_string(writeFileCount)+".txt").c_str(),ios::out);
 			oFile<<tStepCount_<<","<<xStepCount_<<","<<xStepCount_<<","<<xStepCount_<<"\n";
 			
 			oObsFile.close();
-			oObsFile.open(("obs_"+fname+"_"+to_string(writeFileCount)+".txt").c_str(),ios::out);
+			oObsFile.open((prifix+"obs_"+fname+"_"+to_string(writeFileCount)+".txt").c_str(),ios::out);
 			oObsFile<<tStepCount_<<","<<xStepCount_<<","<<xStepCount_<<","<<xStepCount_<<"\n";
 			oObsFile<<obsevablesCount<<"\n";
 			}
