@@ -1,5 +1,6 @@
 # phiFourSim
-Monte-Carlo of Phi4 theory 
+Monte-Carlo of Phi4 theory, using CUDA supported GPUs
+
 
 ## Copilation and running the simulation
 
